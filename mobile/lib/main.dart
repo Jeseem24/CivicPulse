@@ -4,6 +4,7 @@ import 'core/config/theme.dart';
 import 'core/state/auth_provider.dart';
 import 'core/state/complaint_provider.dart';
 import 'core/state/notification_provider.dart';
+import 'core/state/settings_provider.dart';
 import 'features/citizen_official_app/screens/splash/splash_screen.dart';
 
 void main() {
@@ -21,12 +22,19 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => ComplaintProvider()),
         ChangeNotifierProvider(create: (_) => NotificationProvider()),
+        ChangeNotifierProvider(create: (_) => SettingsProvider()),
       ],
-      child: MaterialApp(
-        title: 'Civic Connect',
-        debugShowCheckedModeBanner: false,
-        theme: AppTheme.darkTheme,
-        home: const SplashScreen(),
+      child: Consumer<SettingsProvider>(
+        builder: (context, settingsProvider, child) {
+          return MaterialApp(
+            title: 'Civic Connect',
+            debugShowCheckedModeBanner: false,
+            themeMode: settingsProvider.themeMode,
+            theme: AppTheme.lightTheme,
+            darkTheme: AppTheme.darkTheme,
+            home: const SplashScreen(),
+          );
+        },
       ),
     );
   }

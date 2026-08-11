@@ -4,6 +4,7 @@ import '../../../../../core/config/constants.dart';
 import '../../../../../core/state/auth_provider.dart';
 import '../../../../../core/state/complaint_provider.dart';
 import '../../auth/login_screen.dart';
+import '../../settings/settings_screen.dart';
 
 class ProfileTab extends StatelessWidget {
   const ProfileTab({super.key});
@@ -84,6 +85,17 @@ class ProfileTab extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 32),
+            _buildActionTile(
+              icon: Icons.settings_outlined,
+              title: 'Settings',
+              subtitle: 'Theme, distance radius & preferences',
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const SettingsScreen()),
+                );
+              },
+            ),
             _buildActionTile(
               icon: Icons.shield_outlined,
               title: 'Privacy & Terms',

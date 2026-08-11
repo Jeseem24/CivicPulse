@@ -9,6 +9,7 @@ import 'tabs/civic_map_tab.dart';
 import 'tabs/profile_tab.dart';
 import '../complaint/report_complaint_screen.dart';
 import '../notification/notification_screen.dart';
+import '../settings/settings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -72,32 +73,45 @@ class HomeScreenState extends State<HomeScreen> {
       appBar: AppBar(
         title: Text(appBarTitle),
         automaticallyImplyLeading: false,
-        actions: isUser
-            ? [
-                Consumer<NotificationProvider>(
-                  builder: (context, notifProvider, child) {
-                    final count = notifProvider.unreadCount;
-                    return Badge(
-                      isLabelVisible: count > 0,
-                      label: Text('$count'),
-                      backgroundColor: AppColors.severityHigh,
-                      child: IconButton(
-                        icon: const Icon(Icons.notifications_outlined),
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => const NotificationScreen(),
-                            ),
-                          );
-                        },
-                      ),
-                    );
-                  },
+        actions: [
+          // Notifications bell (citizen only)
+          if (isUser)
+            Consumer<NotificationProvider>(
+              builder: (context, notifProvider, child) {
+                final count = notifProvider.unreadCount;
+                return Badge(
+                  isLabelVisible: count > 0,
+                  label: Text('$count'),
+                  backgroundColor: AppColors.severityHigh,
+                  child: IconButton(
+                    icon: const Icon(Icons.notifications_outlined),
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const NotificationScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                );
+              },
+            ),
+          // Settings gear (both roles)
+          IconButton(
+            icon: const Icon(Icons.settings_outlined),
+            tooltip: 'Settings',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const SettingsScreen(),
                 ),
-                const SizedBox(width: 16),
-              ]
-            : null,
+              );
+            },
+          ),
+          const SizedBox(width: 8),
+        ],
       ),
       body: activeTabs[_currentIndex],
       floatingActionButton: (isUser && _currentIndex != 2 && _currentIndex != 3) 
