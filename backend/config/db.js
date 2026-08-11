@@ -12,7 +12,8 @@ let isFirestore = false;
 // Local in-memory storage fallback
 const localStore = {
   complaints: new Map(),
-  departments: new Map()
+  departments: new Map(),
+  decisionLogs: new Map()
 };
 
 // Seed initial departments into local store
@@ -187,6 +188,33 @@ const db = {
     }
 
     return updated;
+  },
+
+  /**
+   * Save a decision log entry
+   */
+  async saveDecisionLog(log) {
+    const key = log.complaintId || 'unknown';
+    if (isFirestore) {
+      await dbInstance.collection('decisionLogs').add(log);
+    } else {
+      if (!localStore.decisionLogs.has(key)) localStore.decisionLogs.set(key, []);
+      localStore.decisionLogs.get(key).push(log);
+    }
+    return log;
+  },
+
+  /**
+   * Get decision logs for a complaint
+   */
+  async getDecisionLogs(complaintId) {
+    if (isFirestore) {
+      const snapshot = await dbInstance.collection('decisionLogs')
+        .where('complaintId', '==', complaintId).get();
+      return snapshot.docs.map(doc => doc.data());
+    } else {
+      return localStore.decisionLogs.get(complaintId) || [];
+    }
   }
 };
 

@@ -1,12 +1,19 @@
 /**
- * Complaints API Router
+ * Complaints API Router — AI-Powered
  * Implements endpoints specified in DEVELOPER_2_AI_BACKEND.md Section 6.
+ * PLUS: AI analysis, decision logs, SLA, overdue/escalated, resolution quality.
+ *
+ * ALL ORIGINAL ENDPOINTS PRESERVED WITH SAME CONTRACT.
  */
 
 const express = require("express");
 const router = express.Router();
 const db = require("../config/db");
-const { analyzeComplaint } = require("../logic/civicAgent");
+const { analyzeComplaint, analyzeComplaintAI } = require("../logic/civicAgent");
+const { checkSLABreach } = require("../services/ai/slaEngine");
+const { analyzeResolution } = require("../services/ai/resolutionAnalyzer");
+const { compareBeforeAfter } = require("../services/ai/visionAnalyzer");
+const { generateResolutionLog } = require("../services/ai/explanationEngine");
 
 /**
  * Generate human-readable Complaint ID (e.g., CP-2026-00214)
@@ -18,7 +25,8 @@ function generateComplaintId() {
 
 /**
  * POST /complaints
- * Submit a new complaint
+ * Submit a new complaint — NOW with full AI pipeline
+ * Response contract: SAME required fields + additive aiAnalysis
  */
 router.post("/", async (req, res) => {
   try {
@@ -28,12 +36,19 @@ router.post("/", async (req, res) => {
       return res.status(400).json({ error: "title and description are required fields" });
     }
 
-    // 1. Run CivicAgent analysis for categorization, priority scoring & department routing
-    const aiResult = analyzeComplaint(title, description);
+    const complaintId = generateComplaintId();
 
-    // 2. Construct complaint document per MASTER.md data model
+    // Run full AI pipeline (falls back to rules automatically)
+    const aiResult = await analyzeComplaintAI(title, description, {
+      photoUrl: photoUrl || "",
+      location: location || null,
+      complaintId
+    });
+
+    // Construct complaint document per MASTER.md data model
+    // ALL REQUIRED FIELDS PRESERVED
     const newComplaint = {
-      id: generateComplaintId(),
+      id: complaintId,
       title: title.trim(),
       description: description.trim(),
       category: aiResult.category,
@@ -44,10 +59,12 @@ router.post("/", async (req, res) => {
       photoUrl: photoUrl || "",
       createdAt: new Date().toISOString(),
       resolution: null,
-      reopenCount: 0
+      reopenCount: 0,
+      // ADDITIVE AI metadata
+      aiAnalysis: aiResult.aiAnalysis || null
     };
 
-    // 3. Save to database & update department total counter
+    // Save to database & update department total counter
     await db.saveComplaint(newComplaint);
 
     return res.status(201).json(newComplaint);
@@ -58,8 +75,62 @@ router.post("/", async (req, res) => {
 });
 
 /**
+ * GET /complaints/overdue
+ * Returns complaints that have breached their SLA
+ * NEW ENDPOINT — does not conflict with existing routes
+ */
+router.get("/overdue", async (req, res) => {
+  try {
+    const all = await db.getComplaints({});
+    const overdue = all
+      .filter(c => {
+        const breach = checkSLABreach(c);
+        return breach.breached;
+      })
+      .map(c => ({
+        ...c,
+        slaBreach: checkSLABreach(c)
+      }))
+      .sort((a, b) => (b.slaBreach.overdueMinutes || 0) - (a.slaBreach.overdueMinutes || 0));
+
+    return res.status(200).json(overdue);
+  } catch (error) {
+    console.error("Error fetching overdue complaints:", error);
+    return res.status(500).json({ error: "Failed to fetch overdue complaints" });
+  }
+});
+
+/**
+ * GET /complaints/escalated
+ * Returns critical complaints that have breached SLA
+ * NEW ENDPOINT
+ */
+router.get("/escalated", async (req, res) => {
+  try {
+    const all = await db.getComplaints({});
+    const escalated = all
+      .filter(c => {
+        if (c.priority < 70) return false;
+        const breach = checkSLABreach(c);
+        return breach.breached;
+      })
+      .map(c => ({
+        ...c,
+        slaBreach: checkSLABreach(c)
+      }))
+      .sort((a, b) => b.priority - a.priority);
+
+    return res.status(200).json(escalated);
+  } catch (error) {
+    console.error("Error fetching escalated complaints:", error);
+    return res.status(500).json({ error: "Failed to fetch escalated complaints" });
+  }
+});
+
+/**
  * GET /complaints
  * List all complaints with optional filtering by ?department= or ?status=
+ * ORIGINAL CONTRACT — PRESERVED
  */
 router.get("/", async (req, res) => {
   try {
@@ -73,8 +144,24 @@ router.get("/", async (req, res) => {
 });
 
 /**
+ * GET /complaints/:id/decision-log
+ * Returns AI decision log for a complaint
+ * NEW ENDPOINT
+ */
+router.get("/:id/decision-log", async (req, res) => {
+  try {
+    const logs = await db.getDecisionLogs(req.params.id);
+    return res.status(200).json(logs);
+  } catch (error) {
+    console.error("Error fetching decision logs:", error);
+    return res.status(500).json({ error: "Failed to fetch decision logs" });
+  }
+});
+
+/**
  * GET /complaints/:id
  * Retrieve single complaint by ID
+ * ORIGINAL CONTRACT — PRESERVED
  */
 router.get("/:id", async (req, res) => {
   try {
@@ -91,7 +178,8 @@ router.get("/:id", async (req, res) => {
 
 /**
  * PATCH /complaints/:id/resolve
- * Official marks complaint resolved
+ * Official marks complaint resolved — NOW with resolution quality analysis
+ * ORIGINAL CONTRACT — PRESERVED (additive resolutionAnalysis field)
  */
 router.patch("/:id/resolve", async (req, res) => {
   try {
@@ -103,9 +191,20 @@ router.patch("/:id/resolve", async (req, res) => {
       return res.status(404).json({ error: `Complaint with ID ${id} not found` });
     }
 
+    const resolutionDesc = description || "Resolved by official";
+
+    // AI: Analyze resolution quality
+    let resolutionAnalysis = null;
+    try {
+      resolutionAnalysis = await analyzeResolution(existing, resolutionDesc);
+    } catch (err) {
+      // Resolution analysis is best-effort
+    }
+
     const resolution = {
-      description: description || "Resolved by official",
-      resolvedAt: new Date().toISOString()
+      description: resolutionDesc,
+      resolvedAt: new Date().toISOString(),
+      qualityAnalysis: resolutionAnalysis
     };
 
     // Update complaint status to awaiting_verification
@@ -113,6 +212,14 @@ router.patch("/:id/resolve", async (req, res) => {
       status: "awaiting_verification",
       resolution: resolution
     });
+
+    // Save resolution decision log
+    if (resolutionAnalysis) {
+      try {
+        const log = generateResolutionLog(id, resolutionAnalysis, null);
+        await db.saveDecisionLog(log);
+      } catch (err) {}
+    }
 
     // Increment resolvedCount on assigned department
     if (existing.department) {
@@ -129,11 +236,13 @@ router.patch("/:id/resolve", async (req, res) => {
 /**
  * PATCH /complaints/:id/verify
  * Citizen verifies resolution: "fixed" -> closed/verified, "still_exists" -> reopened
+ * ORIGINAL CONTRACT — PRESERVED
+ * NEW: accepts optional afterPhotoUrl for before/after comparison
  */
 router.patch("/:id/verify", async (req, res) => {
   try {
     const { id } = req.params;
-    const { result } = req.body;
+    const { result, afterPhotoUrl } = req.body;
 
     if (!result || !["fixed", "still_exists"].includes(result)) {
       return res.status(400).json({ error: "result must be either 'fixed' or 'still_exists'" });
@@ -145,14 +254,28 @@ router.patch("/:id/verify", async (req, res) => {
     }
 
     let updateFields = {};
+    let verificationAnalysis = null;
+
+    // AI: Before/after image comparison (if after photo provided)
+    if (afterPhotoUrl && existing.photoUrl) {
+      try {
+        verificationAnalysis = await compareBeforeAfter(existing.photoUrl, afterPhotoUrl);
+      } catch (err) {
+        // Vision comparison is best-effort
+      }
+    }
 
     if (result === "fixed") {
-      updateFields = { status: "verified" };
+      updateFields = {
+        status: "verified",
+        verificationAnalysis: verificationAnalysis
+      };
     } else if (result === "still_exists") {
       const newReopenCount = (existing.reopenCount || 0) + 1;
       updateFields = {
         status: "reopened",
-        reopenCount: newReopenCount
+        reopenCount: newReopenCount,
+        verificationAnalysis: verificationAnalysis
       };
 
       // Penalize department trust score
