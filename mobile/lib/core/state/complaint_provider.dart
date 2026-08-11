@@ -36,7 +36,7 @@ class ComplaintProvider with ChangeNotifier {
         await Future.delayed(const Duration(milliseconds: 600));
         _complaints = List.from(MockRepository().complaints);
       } else {
-        final response = await _apiService.get(ApiConfig.complaintsEndpoint);
+        final response = await _apiService.get(ApiConfig.complaintsEndpoint, requireAuth: false);
         final List<dynamic> data = jsonDecode(response.body);
         _complaints = data.map((json) => Complaint.fromJson(json)).toList();
       }
@@ -122,19 +122,22 @@ class ComplaintProvider with ChangeNotifier {
         notifyListeners();
         return true;
       } else {
-        final fields = {
+        final payload = {
           'title': title,
           'description': description,
           'category': deptInfo.backendCategory,
-          'latitude': latitude.toString(),
-          'longitude': longitude.toString(),
+          'location': {
+            'lat': latitude,
+            'lng': longitude,
+            'address': 'Submitted via CivicPulse Mobile App'
+          },
+          'photoPath': imagePath,
         };
 
-        final response = await _apiService.postMultipart(
-          endpoint: ApiConfig.complaintsEndpoint,
-          fields: fields,
-          filePath: imagePath,
-          fileKey: 'photo',
+        final response = await _apiService.post(
+          ApiConfig.complaintsEndpoint,
+          payload,
+          requireAuth: false,
         );
 
         final newComplaint = Complaint.fromJson(jsonDecode(response.body));
@@ -177,10 +180,10 @@ class ComplaintProvider with ChangeNotifier {
         _complaints = List.from(MockRepository().complaints);
         return true;
       } else {
-        // Backend PUT/PATCH resolver endpoint
         final response = await _apiService.patch(
           '${ApiConfig.complaintsEndpoint}/$complaintId/resolve',
           {'description': 'Resolved by official $adminName'},
+          requireAuth: false,
         );
         if (response.statusCode == 200) {
           MockRepository().resolveComplaint(complaintId, adminName);
@@ -287,10 +290,11 @@ class ComplaintProvider with ChangeNotifier {
           _complaints = List.from(MockRepository().complaints);
         }
       } else {
-        final statusValue = isFixed ? 'FIXED' : 'STILL_EXISTS';
-        final response = await _apiService.post(
+        final resultValue = isFixed ? 'fixed' : 'still_exists';
+        final response = await _apiService.patch(
           ApiConfig.getVerifyEndpoint(complaintId),
-          {'status': statusValue},
+          {'result': resultValue},
+          requireAuth: false,
         );
         
         final updatedComplaint = Complaint.fromJson(jsonDecode(response.body));

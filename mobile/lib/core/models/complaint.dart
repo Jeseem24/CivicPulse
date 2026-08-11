@@ -8,8 +8,8 @@ class Complaint {
   final String title;
   final String description;
   final String category;
-  final String status; // 'SUBMITTED', 'IN_PROGRESS', 'RESOLVED', 'VERIFIED', 'REOPENED'
-  final String priority; // 'LOW', 'MEDIUM', 'HIGH'
+  final String status; // 'SUBMITTED', 'ASSIGNED', 'IN_PROGRESS', 'AWAITING_VERIFICATION', 'VERIFIED', 'REOPENED'
+  final String priority; // 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL'
   final String assignedDepartment;
   final double latitude;
   final double longitude;
@@ -59,25 +59,63 @@ class Complaint {
     var commentsListRaw = json['comments'] as List? ?? [];
     List<Comment> commentsList = commentsListRaw.map((e) => Comment.fromJson(e)).toList();
 
+    // Extract location coordinates
+    double lat = 0.0;
+    double lng = 0.0;
+    if (json['location'] is Map) {
+      lat = (json['location']['lat'] as num?)?.toDouble() ?? 0.0;
+      lng = (json['location']['lng'] as num?)?.toDouble() ?? 0.0;
+    } else {
+      lat = (json['latitude'] as num?)?.toDouble() ?? (json['lat'] as num?)?.toDouble() ?? 0.0;
+      lng = (json['longitude'] as num?)?.toDouble() ?? (json['lng'] as num?)?.toDouble() ?? 0.0;
+    }
+
+    // Extract priority string
+    String pStr = 'MEDIUM';
+    if (json['priority'] is num) {
+      int pNum = (json['priority'] as num).toInt();
+      pStr = pNum >= 85 ? 'CRITICAL' : pNum >= 65 ? 'HIGH' : pNum >= 40 ? 'MEDIUM' : 'LOW';
+    } else if (json['priority'] is String) {
+      pStr = (json['priority'] as String).toUpperCase();
+    }
+
+    // Extract SLA deadline
+    DateTime sla = DateTime.now().add(const Duration(days: 2));
+    if (json['aiAnalysis'] is Map && json['aiAnalysis']['slaDeadline'] != null) {
+      sla = DateTime.tryParse(json['aiAnalysis']['slaDeadline']) ?? sla;
+    } else if (json['sla_deadline'] != null) {
+      sla = DateTime.tryParse(json['sla_deadline']) ?? sla;
+    } else if (json['slaDeadline'] != null) {
+      sla = DateTime.tryParse(json['slaDeadline']) ?? sla;
+    }
+
+    // Extract reasoning
+    String reasoning = '';
+    if (json['aiAnalysis'] is Map && json['aiAnalysis']['reason'] != null) {
+      reasoning = json['aiAnalysis']['reason'];
+    } else {
+      reasoning = json['agent_reasoning'] ?? json['agentReasoning'] ?? '';
+    }
+
     return Complaint(
       id: json['id'] ?? '',
       userId: json['user_id'] ?? json['userId'] ?? 'user_anonymous',
       title: json['title'] ?? '',
       description: json['description'] ?? '',
-      category: json['category'] ?? 'Other Civic Issues',
-      status: json['status'] ?? 'SUBMITTED',
-      priority: json['priority'] ?? 'MEDIUM',
-      assignedDepartment: json['assigned_department'] ?? 'Unassigned',
-      latitude: (json['latitude'] as num?)?.toDouble() ?? 0.0,
-      longitude: (json['longitude'] as num?)?.toDouble() ?? 0.0,
-      imageUrl: json['image_url'] ?? '',
-      createdAt: json['created_at'] != null 
-          ? DateTime.parse(json['created_at']) 
+      category: json['category'] ?? 'Public Infrastructure',
+      status: (json['status'] ?? 'SUBMITTED').toString().toUpperCase(),
+      priority: pStr,
+      assignedDepartment: json['department'] ?? json['assigned_department'] ?? json['assignedDepartment'] ?? 'Roads Dept',
+      latitude: lat,
+      longitude: lng,
+      imageUrl: json['photoUrl'] ?? json['photo_url'] ?? json['image_url'] ?? json['imageUrl'] ?? '',
+      createdAt: json['createdAt'] != null
+          ? (DateTime.tryParse(json['createdAt']) ?? DateTime.now())
+          : json['created_at'] != null 
+          ? (DateTime.tryParse(json['created_at']) ?? DateTime.now()) 
           : DateTime.now(),
-      slaDeadline: json['sla_deadline'] != null 
-          ? DateTime.parse(json['sla_deadline']) 
-          : DateTime.now().add(const Duration(days: 3)), // default fallback SLA
-      agentReasoning: json['agent_reasoning'] ?? '',
+      slaDeadline: sla,
+      agentReasoning: reasoning,
       timeline: timelineList,
       comments: commentsList,
     );
