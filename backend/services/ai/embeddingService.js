@@ -1,5 +1,6 @@
 /**
- * Embedding Service — Text embeddings via Gemini for semantic similarity
+ * Embedding Service — Text embeddings for semantic similarity
+ * Uses Gemini embedContent if available, with a fast 128-dim TF-IDF n-gram vectorizer fallback.
  */
 
 const { getEmbeddingModel, isAIAvailable } = require("./geminiClient");
@@ -8,25 +9,67 @@ const { getEmbeddingModel, isAIAvailable } = require("./geminiClient");
 const embeddingCache = new Map();
 
 /**
- * Generate text embedding
+ * Generate 128-dimensional normalized term n-gram embedding vector
  * @param {string} text
- * @returns {number[]|null}
+ * @returns {number[]} 128-dim unit vector
+ */
+function generateLocalEmbedding(text = "") {
+  const normalized = text.toLowerCase().replace(/[^a-z0-9\s]/g, " ");
+  const words = normalized.split(/\s+/).filter(w => w.length > 2);
+  const vector = new Array(128).fill(0);
+
+  const tokens = [];
+  for (let i = 0; i < words.length; i++) {
+    tokens.push(words[i]);
+    if (i < words.length - 1) tokens.push(`${words[i]}_${words[i + 1]}`);
+  }
+
+  for (const token of tokens) {
+    let hash = 0;
+    for (let c = 0; c < token.length; c++) {
+      hash = ((hash << 5) - hash + token.charCodeAt(c)) | 0;
+    }
+    const idx = Math.abs(hash) % 128;
+    vector[idx] += 1;
+  }
+
+  // Normalize to unit length
+  let norm = 0;
+  for (let i = 0; i < 128; i++) norm += vector[i] * vector[i];
+  norm = Math.sqrt(norm);
+  if (norm > 0) {
+    for (let i = 0; i < 128; i++) vector[i] /= norm;
+  }
+
+  return vector;
+}
+
+/**
+ * Generate text embedding vector
+ * @param {string} text
+ * @returns {number[]} Embedding vector
  */
 async function getEmbedding(text) {
-  if (!isAIAvailable()) return null;
-  const model = getEmbeddingModel();
-  if (!model) return null;
+  if (!text || typeof text !== "string") return generateLocalEmbedding("");
 
-  try {
-    const result = await Promise.race([
-      model.embedContent(text),
-      new Promise((_, reject) => setTimeout(() => reject(new Error("Embedding timeout")), 8000))
-    ]);
-    return result.embedding.values;
-  } catch (err) {
-    console.error("[EMBEDDING] Failed:", err.message);
-    return null;
+  if (isAIAvailable()) {
+    const model = getEmbeddingModel();
+    if (model) {
+      try {
+        const result = await Promise.race([
+          model.embedContent(text),
+          new Promise((_, reject) => setTimeout(() => reject(new Error("Embedding timeout")), 5000))
+        ]);
+        if (result && result.embedding && Array.isArray(result.embedding.values)) {
+          return result.embedding.values;
+        }
+      } catch (err) {
+        // API embedding unavailable or 404 — use local fallback vectorizer
+      }
+    }
   }
+
+  return generateLocalEmbedding(text);
 }
 
 /**
@@ -65,4 +108,11 @@ function getAllCachedEmbeddings() {
   return embeddingCache;
 }
 
-module.exports = { getEmbedding, cosineSimilarity, cacheEmbedding, getCachedEmbedding, getAllCachedEmbeddings };
+module.exports = {
+  getEmbedding,
+  generateLocalEmbedding,
+  cosineSimilarity,
+  cacheEmbedding,
+  getCachedEmbedding,
+  getAllCachedEmbeddings
+};

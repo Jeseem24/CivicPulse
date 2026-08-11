@@ -36,7 +36,24 @@ const TOOLS = {
     return all.filter(c => c.priority >= 70 && !["verified", "closed"].includes(c.status))
       .sort((a, b) => b.priority - a.priority)
       .slice(0, 15)
-      .map(c => ({ id: c.id, title: c.title, priority: c.priority, category: c.category, department: c.department, status: c.status }));
+      .map(c => ({
+        id: c.id,
+        title: c.title,
+        description: c.description,
+        priority: c.priority,
+        category: c.category,
+        department: c.department,
+        status: c.status,
+        aiReasoning: c.aiAnalysis ? {
+          severity: c.aiAnalysis.severity,
+          urgency: c.aiAnalysis.urgency,
+          safetyRisk: c.aiAnalysis.safetyRisk,
+          affectedPopulation: c.aiAnalysis.affectedPopulation,
+          riskFactors: c.aiAnalysis.riskFactors,
+          reason: c.aiAnalysis.reason,
+          recommendedAction: c.aiAnalysis.recommendedAction
+        } : null
+      }));
   },
   async getOverdueComplaints() {
     const all = await db.getComplaints({});
