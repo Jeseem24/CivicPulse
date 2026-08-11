@@ -3,6 +3,7 @@
  * Tests AI pipeline, fallback behavior, fusion, SLA, resolution quality, and analytics.
  */
 
+process.env.NODE_ENV = "test";
 const { analyzeComplaint, analyzeComplaintAI, ruleBasedAnalysis } = require("./logic/civicAgent");
 const { calculateAIPriority } = require("./services/ai/priorityEngine");
 const { calculateSLA, checkSLABreach } = require("./services/ai/slaEngine");

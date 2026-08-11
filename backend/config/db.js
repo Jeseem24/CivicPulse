@@ -1,139 +1,212 @@
 /**
- * Database Abstraction Layer for CivicPulse
- * Uses Firebase Firestore if credentials exist, otherwise falls back to local in-memory store.
+ * CivicPulse — Persistent SQLite Database Layer (`backend/civicpulse.db`)
+ * Fully persistent, zero cloud setup, thread-safe, fast SQL database.
  */
 
+const path = require("path");
+const sqlite3 = require("sqlite3").verbose();
 const initialDepartments = require("../data/seedDepartments");
 const { calculateTrustScore } = require("../logic/trustScore");
 
-let dbInstance = null;
-let isFirestore = false;
+const DB_PATH = path.join(__dirname, "..", "civicpulse.db");
+const dbSqlite = new sqlite3.Database(DB_PATH);
 
-// Local in-memory storage fallback
-const localStore = {
-  complaints: new Map(),
-  departments: new Map(),
-  decisionLogs: new Map()
-};
+console.log(`[DB] Connected to persistent SQLite database at ${DB_PATH}`);
 
-// Seed initial departments into local store
-initialDepartments.forEach(dept => {
-  localStore.departments.set(dept.name, { ...dept });
-});
+// Promisified helper functions for SQLite queries
+function runAsync(sql, params = []) {
+  return new Promise((resolve, reject) => {
+    dbSqlite.run(sql, params, function (err) {
+      if (err) reject(err);
+      else resolve(this);
+    });
+  });
+}
 
-function initDb() {
+function getAsync(sql, params = []) {
+  return new Promise((resolve, reject) => {
+    dbSqlite.get(sql, params, (err, row) => {
+      if (err) reject(err);
+      else resolve(row);
+    });
+  });
+}
+
+function allAsync(sql, params = []) {
+  return new Promise((resolve, reject) => {
+    dbSqlite.all(sql, params, (err, rows) => {
+      if (err) reject(err);
+      else resolve(rows || []);
+    });
+  });
+}
+
+// Initialize tables and seed initial departments
+async function initTables() {
   try {
-    const admin = require("firebase-admin");
-    let serviceAccount = null;
+    // 1. Departments table
+    await runAsync(`
+      CREATE TABLE IF NOT EXISTS departments (
+        id TEXT PRIMARY KEY,
+        name TEXT UNIQUE NOT NULL,
+        trustScore INTEGER NOT NULL DEFAULT 100,
+        totalComplaints INTEGER NOT NULL DEFAULT 0,
+        resolvedCount INTEGER NOT NULL DEFAULT 0,
+        reopenCount INTEGER NOT NULL DEFAULT 0
+      )
+    `);
 
-    if (process.env.FIREBASE_SERVICE_ACCOUNT) {
-      serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-    } else {
-      try {
-        serviceAccount = require("../serviceAccountKey.json");
-      } catch (err) {
-        // serviceAccountKey.json not present
+    // 2. Complaints table
+    await runAsync(`
+      CREATE TABLE IF NOT EXISTS complaints (
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        description TEXT NOT NULL,
+        category TEXT NOT NULL,
+        priority INTEGER NOT NULL,
+        department TEXT NOT NULL,
+        status TEXT NOT NULL,
+        location TEXT,
+        photoUrl TEXT,
+        createdAt TEXT NOT NULL,
+        resolution TEXT,
+        reopenCount INTEGER NOT NULL DEFAULT 0,
+        aiAnalysis TEXT
+      )
+    `);
+
+    // 3. Decision Logs table
+    await runAsync(`
+      CREATE TABLE IF NOT EXISTS decision_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        complaintId TEXT NOT NULL,
+        timestamp TEXT NOT NULL,
+        action TEXT NOT NULL,
+        logData TEXT NOT NULL
+      )
+    `);
+
+    // Seed initial departments if table is empty
+    const existingDepts = await allAsync("SELECT * FROM departments");
+    if (existingDepts.length === 0) {
+      for (const dept of initialDepartments) {
+        await runAsync(
+          "INSERT OR IGNORE INTO departments (id, name, trustScore, totalComplaints, resolvedCount, reopenCount) VALUES (?, ?, ?, ?, ?, ?)",
+          [dept.id, dept.name, dept.trustScore, dept.totalComplaints, dept.resolvedCount, dept.reopenCount]
+        );
       }
+      console.log("[DB] Seeded 5 initial departments into SQLite database.");
     }
-
-    if (serviceAccount && !admin.apps.length) {
-      admin.initializeApp({
-        credential: admin.credential.cert(serviceAccount)
-      });
-      dbInstance = admin.firestore();
-      isFirestore = true;
-      console.log("[DB] Connected to Firebase Firestore");
-    } else {
-      console.log("[DB] Firebase credentials not found. Using fast Local Memory Store.");
-    }
-  } catch (error) {
-    console.log("[DB] Firestore init error, using Local Memory Store fallback:", error.message);
+  } catch (err) {
+    console.error("[DB] Table initialization error:", err.message);
   }
 }
 
-// Initialize database
-initDb();
+// Initialize tables promise
+const initPromise = initTables();
+
+// Helper to ensure database is initialized before any query runs
+async function ensureInit() {
+  await initPromise;
+}
+
+// Helper to parse JSON fields safely
+function parseComplaintRow(row) {
+  if (!row) return null;
+  return {
+    ...row,
+    location: row.location ? JSON.parse(row.location) : { lat: 0.0, lng: 0.0, address: "Unspecified location" },
+    resolution: row.resolution ? JSON.parse(row.resolution) : null,
+    aiAnalysis: row.aiAnalysis ? JSON.parse(row.aiAnalysis) : null
+  };
+}
 
 const db = {
   /**
    * Get all departments
    */
   async getDepartments() {
-    if (isFirestore) {
-      const snapshot = await dbInstance.collection("departments").get();
-      if (snapshot.empty) {
-        // Seed departments to Firestore if empty
-        const batch = dbInstance.batch();
-        initialDepartments.forEach(dept => {
-          const docRef = dbInstance.collection("departments").doc(dept.name);
-          batch.set(docRef, dept);
-        });
-        await batch.commit();
-        return initialDepartments;
-      }
-      return snapshot.docs.map(doc => doc.data());
-    } else {
-      return Array.from(localStore.departments.values());
-    }
+    await ensureInit();
+    return await allAsync("SELECT * FROM departments");
   },
 
   /**
    * Get department by name
    */
   async getDepartmentByName(deptName) {
-    if (isFirestore) {
-      const doc = await dbInstance.collection("departments").doc(deptName).get();
-      return doc.exists ? doc.data() : null;
-    } else {
-      return localStore.departments.get(deptName) || null;
-    }
+    await ensureInit();
+    return await getAsync("SELECT * FROM departments WHERE name = ?", [deptName]);
   },
 
   /**
-   * Update department metrics (resolvedCount, reopenCount, trustScore)
+   * Update department metrics
    */
   async updateDepartmentMetrics(deptName, { isResolved = false, isReopened = false, incrementTotal = false }) {
+    await ensureInit();
     let dept = await db.getDepartmentByName(deptName);
     if (!dept) {
-      dept = {
-        id: `dept-${deptName.toLowerCase().replace(/\s+/g, "-")}`,
-        name: deptName,
-        trustScore: 100,
-        totalComplaints: 0,
-        resolvedCount: 0,
-        reopenCount: 0
-      };
+      const newId = `dept-${deptName.toLowerCase().replace(/\s+/g, "-")}`;
+      await runAsync(
+        "INSERT INTO departments (id, name, trustScore, totalComplaints, resolvedCount, reopenCount) VALUES (?, ?, ?, ?, ?, ?)",
+        [newId, deptName, 100, 0, 0, 0]
+      );
+      dept = await db.getDepartmentByName(deptName);
     }
 
-    if (incrementTotal) dept.totalComplaints = (dept.totalComplaints || 0) + 1;
-    if (isResolved) dept.resolvedCount = (dept.resolvedCount || 0) + 1;
+    let totalComplaints = dept.totalComplaints || 0;
+    let resolvedCount = dept.resolvedCount || 0;
+    let reopenCount = dept.reopenCount || 0;
+    let trustScore = dept.trustScore;
+
+    if (incrementTotal) totalComplaints += 1;
+    if (isResolved) resolvedCount += 1;
     if (isReopened) {
-      dept.reopenCount = (dept.reopenCount || 0) + 1;
-      dept.trustScore = calculateTrustScore(dept.reopenCount);
+      reopenCount += 1;
+      trustScore = calculateTrustScore(reopenCount);
     }
 
-    if (isFirestore) {
-      await dbInstance.collection("departments").doc(deptName).set(dept, { merge: true });
-    } else {
-      localStore.departments.set(deptName, dept);
-    }
+    await runAsync(
+      "UPDATE departments SET totalComplaints = ?, resolvedCount = ?, reopenCount = ?, trustScore = ? WHERE name = ?",
+      [totalComplaints, resolvedCount, reopenCount, trustScore, deptName]
+    );
 
-    return dept;
+    return await db.getDepartmentByName(deptName);
   },
 
   /**
    * Save new complaint
    */
   async saveComplaint(complaint) {
-    if (isFirestore) {
-      await dbInstance.collection("complaints").doc(complaint.id).set(complaint);
-    } else {
-      localStore.complaints.set(complaint.id, complaint);
-    }
-    // Increment total count on target department
+    await ensureInit();
+    const locationJson = JSON.stringify(complaint.location || { lat: 0.0, lng: 0.0, address: "Unspecified location" });
+    const resolutionJson = complaint.resolution ? JSON.stringify(complaint.resolution) : null;
+    const aiAnalysisJson = complaint.aiAnalysis ? JSON.stringify(complaint.aiAnalysis) : null;
+
+    await runAsync(
+      `INSERT OR REPLACE INTO complaints 
+       (id, title, description, category, priority, department, status, location, photoUrl, createdAt, resolution, reopenCount, aiAnalysis) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        complaint.id,
+        complaint.title,
+        complaint.description,
+        complaint.category,
+        complaint.priority,
+        complaint.department,
+        complaint.status,
+        locationJson,
+        complaint.photoUrl || "",
+        complaint.createdAt || new Date().toISOString(),
+        resolutionJson,
+        complaint.reopenCount || 0,
+        aiAnalysisJson
+      ]
+    );
+
     if (complaint.department) {
       await db.updateDepartmentMetrics(complaint.department, { incrementTotal: true });
     }
+
     return complaint;
   },
 
@@ -141,66 +214,80 @@ const db = {
    * Get complaint by ID
    */
   async getComplaintById(id) {
-    if (isFirestore) {
-      const doc = await dbInstance.collection("complaints").doc(id).get();
-      return doc.exists ? doc.data() : null;
-    } else {
-      return localStore.complaints.get(id) || null;
-    }
+    await ensureInit();
+    const row = await getAsync("SELECT * FROM complaints WHERE id = ?", [id]);
+    return parseComplaintRow(row);
   },
 
   /**
-   * List all complaints, with optional department & status filtering
+   * List all complaints with optional filtering
    */
   async getComplaints(filter = {}) {
-    let list = [];
-    if (isFirestore) {
-      let query = dbInstance.collection("complaints");
-      if (filter.department) query = query.where("department", "==", filter.department);
-      if (filter.status) query = query.where("status", "==", filter.status);
-      const snapshot = await query.get();
-      list = snapshot.docs.map(doc => doc.data());
-    } else {
-      list = Array.from(localStore.complaints.values());
-      if (filter.department) {
-        list = list.filter(c => c.department === filter.department);
-      }
-      if (filter.status) {
-        list = list.filter(c => c.status === filter.status);
-      }
+    await ensureInit();
+    let sql = "SELECT * FROM complaints WHERE 1=1";
+    const params = [];
+
+    if (filter.department) {
+      sql += " AND department = ?";
+      params.push(filter.department);
     }
-    return list;
+    if (filter.status) {
+      sql += " AND status = ?";
+      params.push(filter.status);
+    }
+
+    sql += " ORDER BY createdAt DESC";
+    const rows = await allAsync(sql, params);
+    return rows.map(parseComplaintRow);
   },
 
   /**
    * Update existing complaint
    */
   async updateComplaint(id, updateFields) {
+    await ensureInit();
     const existing = await db.getComplaintById(id);
     if (!existing) return null;
 
     const updated = { ...existing, ...updateFields };
+    const locationJson = JSON.stringify(updated.location);
+    const resolutionJson = updated.resolution ? JSON.stringify(updated.resolution) : null;
+    const aiAnalysisJson = updated.aiAnalysis ? JSON.stringify(updated.aiAnalysis) : null;
 
-    if (isFirestore) {
-      await dbInstance.collection("complaints").doc(id).update(updateFields);
-    } else {
-      localStore.complaints.set(id, updated);
-    }
+    await runAsync(
+      `UPDATE complaints SET 
+       title = ?, description = ?, category = ?, priority = ?, department = ?, 
+       status = ?, location = ?, photoUrl = ?, resolution = ?, reopenCount = ?, aiAnalysis = ? 
+       WHERE id = ?`,
+      [
+        updated.title,
+        updated.description,
+        updated.category,
+        updated.priority,
+        updated.department,
+        updated.status,
+        locationJson,
+        updated.photoUrl || "",
+        resolutionJson,
+        updated.reopenCount || 0,
+        aiAnalysisJson,
+        id
+      ]
+    );
 
     return updated;
   },
 
   /**
-   * Save a decision log entry
+   * Save decision log entry
    */
   async saveDecisionLog(log) {
-    const key = log.complaintId || 'unknown';
-    if (isFirestore) {
-      await dbInstance.collection('decisionLogs').add(log);
-    } else {
-      if (!localStore.decisionLogs.has(key)) localStore.decisionLogs.set(key, []);
-      localStore.decisionLogs.get(key).push(log);
-    }
+    await ensureInit();
+    const logDataJson = JSON.stringify(log);
+    await runAsync(
+      "INSERT INTO decision_logs (complaintId, timestamp, action, logData) VALUES (?, ?, ?, ?)",
+      [log.complaintId || "unknown", log.timestamp || new Date().toISOString(), log.action || "AI_ANALYSIS", logDataJson]
+    );
     return log;
   },
 
@@ -208,13 +295,24 @@ const db = {
    * Get decision logs for a complaint
    */
   async getDecisionLogs(complaintId) {
-    if (isFirestore) {
-      const snapshot = await dbInstance.collection('decisionLogs')
-        .where('complaintId', '==', complaintId).get();
-      return snapshot.docs.map(doc => doc.data());
-    } else {
-      return localStore.decisionLogs.get(complaintId) || [];
-    }
+    await ensureInit();
+    const rows = await allAsync(
+      "SELECT * FROM decision_logs WHERE complaintId = ? ORDER BY id ASC",
+      [complaintId]
+    );
+    return rows.map(r => JSON.parse(r.logData));
+  },
+
+  /**
+   * Get global feed of recent decision logs
+   */
+  async getAllDecisionLogs(limit = 30) {
+    await ensureInit();
+    const rows = await allAsync(
+      "SELECT * FROM decision_logs ORDER BY id DESC LIMIT ?",
+      [limit]
+    );
+    return rows.map(r => JSON.parse(r.logData));
   }
 };
 

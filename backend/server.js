@@ -50,6 +50,19 @@ app.use("/departments", departmentsRouter);
 app.use("/assistant", assistantRouter);
 app.use("/analytics", analyticsRouter);
 
+// Live AI Decision Feed endpoint
+app.get("/decision-log/feed", async (req, res) => {
+  try {
+    const db = require("./config/db");
+    const limit = parseInt(req.query.limit) || 30;
+    const logs = await db.getAllDecisionLogs(limit);
+    return res.status(200).json(logs);
+  } catch (error) {
+    console.error("Error fetching decision log feed:", error);
+    return res.status(500).json({ error: "Failed to fetch decision log feed" });
+  }
+});
+
 // Demo seed endpoint
 app.post("/seed-demo", async (req, res) => {
   try {

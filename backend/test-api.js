@@ -2,6 +2,7 @@
  * End-to-End API Integration Verification Script for Developer 2
  */
 
+process.env.NODE_ENV = "test";
 const app = require("./server");
 const db = require("./config/db");
 const { analyzeComplaint } = require("./logic/civicAgent");
