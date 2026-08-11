@@ -6,10 +6,9 @@ import '../../../../core/config/constants.dart';
 import '../../../../core/state/auth_provider.dart';
 import '../../../../core/state/complaint_provider.dart';
 import '../../../../core/services/camera_service.dart';
-import '../../../../core/services/location_service.dart';
 import '../../../../core/services/ai_prediction_service.dart';
+import '../../../map_intelligence/widgets/location_picker_widget.dart';
 import '../../widgets/custom_button.dart';
-import 'map_picker_screen.dart';
 
 class ReportComplaintScreen extends StatefulWidget {
   const ReportComplaintScreen({super.key});
@@ -29,13 +28,11 @@ class _ReportComplaintScreenState extends State<ReportComplaintScreen> {
   String? _imagePath;
   LatLng? _selectedLocation;
   
-  bool _isLocating = false;
   bool _isPredicting = false;
   String? _predictionError;
   double? _confidence;
 
   final CameraService _cameraService = CameraService();
-  final LocationService _locationService = LocationService();
 
   @override
   void initState() {
@@ -102,56 +99,6 @@ class _ReportComplaintScreenState extends State<ReportComplaintScreen> {
     if (path != null) {
       setState(() {
         _imagePath = path;
-      });
-    }
-  }
-
-  Future<void> _fetchGPS() async {
-    setState(() {
-      _isLocating = true;
-    });
-
-    try {
-      final position = await _locationService.getCurrentPosition();
-      setState(() {
-        _selectedLocation = LatLng(position.latitude, position.longitude);
-      });
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('GPS coordinates successfully captured!'),
-            backgroundColor: AppColors.severityLow,
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to get GPS: ${e.toString()}'),
-            backgroundColor: AppColors.severityHigh,
-          ),
-        );
-      }
-    } finally {
-      setState(() {
-        _isLocating = false;
-      });
-    }
-  }
-
-  Future<void> _openMapPicker() async {
-    final startLoc = _selectedLocation ?? const LatLng(12.9716, 77.5946);
-    final result = await Navigator.push<LatLng>(
-      context,
-      MaterialPageRoute(
-        builder: (context) => MapPickerScreen(initialLocation: startLoc),
-      ),
-    );
-
-    if (result != null) {
-      setState(() {
-        _selectedLocation = result;
       });
     }
   }
@@ -345,83 +292,14 @@ class _ReportComplaintScreenState extends State<ReportComplaintScreen> {
                   ],
                 ),
               const SizedBox(height: 24),
-              const Text(
-                'Location Coordinates',
-                style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.textPrimary, fontSize: 16),
+              LocationPickerWidget(
+                value: _selectedLocation,
+                onChanged: (location) {
+                  setState(() {
+                    _selectedLocation = location;
+                  });
+                },
               ),
-              const SizedBox(height: 12),
-              if (_selectedLocation != null)
-                Container(
-                  padding: const EdgeInsets.all(AppConstants.padding),
-                  decoration: BoxDecoration(
-                    color: AppColors.surface,
-                    borderRadius: BorderRadius.circular(AppConstants.borderRadius),
-                    border: Border.all(color: AppColors.border),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.location_pin, color: AppColors.severityHigh, size: 28),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('Confirmed Location Coordinates', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
-                            const SizedBox(height: 2),
-                            Text(
-                              'Lat: ${_selectedLocation!.latitude.toStringAsFixed(6)}, Lng: ${_selectedLocation!.longitude.toStringAsFixed(6)}',
-                              style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.textPrimary, fontSize: 14),
-                            ),
-                          ],
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.edit_location_alt_outlined, color: AppColors.primary),
-                        onPressed: _openMapPicker,
-                      )
-                    ],
-                  ),
-                )
-              else
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(AppConstants.borderRadius),
-                          ),
-                          side: const BorderSide(color: AppColors.border),
-                        ),
-                        onPressed: _isLocating ? null : _fetchGPS,
-                        icon: _isLocating
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation(AppColors.primary)),
-                              )
-                            : const Icon(Icons.my_location, color: AppColors.primary),
-                        label: Text(_isLocating ? 'Locating...' : 'Get Current GPS', style: const TextStyle(color: AppColors.textPrimary)),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(AppConstants.borderRadius),
-                          ),
-                          side: const BorderSide(color: AppColors.border),
-                        ),
-                        onPressed: _openMapPicker,
-                        icon: const Icon(Icons.map_outlined, color: AppColors.primary),
-                        label: const Text('Select on Map', style: TextStyle(color: AppColors.textPrimary)),
-                      ),
-                    ),
-                  ],
-                ),
               const SizedBox(height: 40),
               CustomButton(
                 text: 'Submit Grievance',

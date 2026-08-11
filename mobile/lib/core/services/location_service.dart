@@ -1,39 +1,88 @@
+import 'dart:async';
+
 import 'package:geolocator/geolocator.dart';
+
+enum LocationSettingsTarget { none, app, locationServices }
+
+class LocationFailure implements Exception {
+  const LocationFailure(this.message, {this.settingsTarget = LocationSettingsTarget.none});
+
+  final String message;
+  final LocationSettingsTarget settingsTarget;
+
+  @override
+  String toString() => message;
+}
 
 class LocationService {
   Future<bool> checkLocationServicesEnabled() async {
-    return await Geolocator.isLocationServiceEnabled();
+    return Geolocator.isLocationServiceEnabled();
   }
 
   Future<LocationPermission> checkPermission() async {
-    return await Geolocator.checkPermission();
+    return Geolocator.checkPermission();
   }
 
   Future<LocationPermission> requestPermission() async {
-    return await Geolocator.requestPermission();
+    return Geolocator.requestPermission();
   }
 
-  Future<Position> getCurrentPosition() async {
-    bool serviceEnabled = await checkLocationServicesEnabled();
-    if (!serviceEnabled) {
-      throw const LocationServiceDisabledException();
+  Future<LocationPermission> ensurePermission() async {
+    if (!await checkLocationServicesEnabled()) {
+      throw const LocationFailure(
+        'Turn on Location on your phone, then try again.',
+        settingsTarget: LocationSettingsTarget.locationServices,
+      );
     }
 
-    LocationPermission permission = await checkPermission();
+    var permission = await checkPermission();
     if (permission == LocationPermission.denied) {
       permission = await requestPermission();
-      if (permission == LocationPermission.denied) {
-        throw Exception('Location permission denied.');
-      }
+    }
+
+    if (permission == LocationPermission.denied) {
+      throw const LocationFailure(
+        'Location permission is required to place and view civic reports.',
+        settingsTarget: LocationSettingsTarget.app,
+      );
     }
 
     if (permission == LocationPermission.deniedForever) {
-      throw Exception('Location permissions are permanently denied. Please enable them in settings.');
+      throw const LocationFailure(
+        'Location permission is blocked. Allow it from the app settings.',
+        settingsTarget: LocationSettingsTarget.app,
+      );
     }
 
-    // High accuracy queries for precise positioning of civic reports
-    return await Geolocator.getCurrentPosition(
-      desiredAccuracy: LocationAccuracy.high,
-    );
+    return permission;
+  }
+
+  Future<Position> getCurrentPosition() async {
+    await ensurePermission();
+
+    try {
+      return await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+        timeLimit: const Duration(seconds: 20),
+      );
+    } on TimeoutException {
+      final lastKnownPosition = await Geolocator.getLastKnownPosition();
+      if (lastKnownPosition != null) return lastKnownPosition;
+      throw const LocationFailure(
+        'A GPS fix could not be obtained. Move near a window and try again.',
+      );
+    }
+  }
+
+  Future<bool> openSettingsFor(Object error) async {
+    if (error is! LocationFailure) return false;
+    switch (error.settingsTarget) {
+      case LocationSettingsTarget.app:
+        return Geolocator.openAppSettings();
+      case LocationSettingsTarget.locationServices:
+        return Geolocator.openLocationSettings();
+      case LocationSettingsTarget.none:
+        return false;
+    }
   }
 }
