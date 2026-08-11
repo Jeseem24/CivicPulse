@@ -106,10 +106,10 @@ app.post("/seed-demo", async (req, res) => {
 
 // Start listening
 if (process.env.NODE_ENV !== "test") {
-  app.listen(PORT, () => {
+  app.listen(PORT, "0.0.0.0", () => {
     const { isAIAvailable } = require("./services/ai/geminiClient");
     console.log(`=================================================`);
-    console.log(`🚀 CivicPulse AI Server running on http://localhost:${PORT}`);
+    console.log(`🚀 CivicPulse AI Server running on http://0.0.0.0:${PORT}`);
     console.log(`🤖 AI Engine: ${isAIAvailable() ? "ACTIVE (Gemini)" : "DISABLED (rule-based fallback)"}`);
     console.log(`=================================================`);
   });
