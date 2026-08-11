@@ -177,7 +177,7 @@ class _CivicMapTabState extends State<CivicMapTab> {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (context) => ComplaintDetailScreen(complaintId: _activeComplaint!.id),
+                              builder: (context) => ComplaintDetailScreen(complaint: _activeComplaint!),
                             ),
                           );
                         },

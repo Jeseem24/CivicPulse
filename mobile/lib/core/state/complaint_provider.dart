@@ -4,7 +4,9 @@ import '../config/api_config.dart';
 import '../config/constants.dart';
 import '../models/complaint.dart';
 import '../models/timeline_event.dart';
+import '../models/comment.dart';
 import '../services/api_service.dart';
+import '../services/mock_repository.dart';
 
 class ComplaintProvider with ChangeNotifier {
   final ApiService _apiService = ApiService();
@@ -21,131 +23,7 @@ class ComplaintProvider with ChangeNotifier {
   }
 
   void _loadMockComplaints() {
-    _complaints = [
-      Complaint(
-        id: 'c1',
-        title: 'Huge Pothole near Central Market',
-        description: 'A deep pothole is blocking traffic near the entrance of Central Market. It has caused multiple two-wheeler accidents in the past few days.',
-        category: 'Roads',
-        status: 'IN_PROGRESS',
-        priority: 'HIGH',
-        assignedDepartment: 'Roads Dept',
-        latitude: 12.971598,
-        longitude: 77.594562,
-        imageUrl: 'https://images.unsplash.com/photo-1515162305285-0293e4767cc2?q=80&w=600',
-        createdAt: DateTime.now().subtract(const Duration(hours: 36)),
-        slaDeadline: DateTime.now().add(const Duration(hours: 12)),
-        agentReasoning: 'CivicAgent Reason: Pothole located in a high-density market zone. Classified as HIGH priority to mitigate public safety hazards and vehicle damage.',
-        timeline: [
-          TimelineEvent(
-            id: 'e1_1',
-            status: 'SUBMITTED',
-            title: 'Complaint Submitted',
-            description: 'Grievance registered successfully by Citizen.',
-            timestamp: DateTime.now().subtract(const Duration(hours: 36)),
-            actor: 'CITIZEN',
-          ),
-          TimelineEvent(
-            id: 'e1_2',
-            status: 'SUBMITTED',
-            title: 'AI Analysis Completed',
-            description: 'CivicAgent analyzed report. Department: Roads & Highways, Priority: HIGH. Assigned to Roads & Highways Department.',
-            timestamp: DateTime.now().subtract(const Duration(hours: 35, minutes: 45)),
-            actor: 'CIVIC_AGENT',
-          ),
-          TimelineEvent(
-            id: 'e1_3',
-            status: 'IN_PROGRESS',
-            title: 'Work In Progress',
-            description: 'Assigned officer Accepted the grievance. Team dispatched to inspect and repair the road.',
-            timestamp: DateTime.now().subtract(const Duration(hours: 24)),
-            actor: 'OFFICER',
-          ),
-        ],
-      ),
-      Complaint(
-        id: 'c2',
-        title: 'Broken Streetlight on 5th Cross Street',
-        description: 'The street lamp opposite House #42 is broken and flickering. The street is pitch black after 7 PM, making it unsafe for walking.',
-        category: 'Electricity',
-        status: 'RESOLVED',
-        priority: 'MEDIUM',
-        assignedDepartment: 'Electricity Dept',
-        latitude: 12.9698,
-        longitude: 77.5912,
-        imageUrl: 'https://images.unsplash.com/photo-1509024644558-2f56ce76c490?q=80&w=600',
-        createdAt: DateTime.now().subtract(const Duration(hours: 48)),
-        slaDeadline: DateTime.now().subtract(const Duration(hours: 24)),
-        agentReasoning: 'CivicAgent Reason: Streetlight failure classified as MEDIUM priority. Standard SLA is 24 hours.',
-        timeline: [
-          TimelineEvent(
-            id: 'e2_1',
-            status: 'SUBMITTED',
-            title: 'Complaint Submitted',
-            description: 'Grievance registered successfully by Citizen.',
-            timestamp: DateTime.now().subtract(const Duration(hours: 48)),
-            actor: 'CITIZEN',
-          ),
-          TimelineEvent(
-            id: 'e2_2',
-            status: 'SUBMITTED',
-            title: 'AI Routing Complete',
-            description: 'CivicAgent categorized issue under Electricity. Assigned priority: MEDIUM.',
-            timestamp: DateTime.now().subtract(const Duration(hours: 47, minutes: 50)),
-            actor: 'CIVIC_AGENT',
-          ),
-          TimelineEvent(
-            id: 'e2_3',
-            status: 'IN_PROGRESS',
-            title: 'Work Initiated',
-            description: 'Maintenance team accepted. Replacement bulb ordered.',
-            timestamp: DateTime.now().subtract(const Duration(hours: 30)),
-            actor: 'OFFICER',
-          ),
-          TimelineEvent(
-            id: 'e2_4',
-            status: 'RESOLVED',
-            title: 'Complaint Resolved',
-            description: 'Officer uploaded resolution proof. Streetlight bulb has been replaced and verified working.',
-            timestamp: DateTime.now().subtract(const Duration(hours: 6)),
-            actor: 'OFFICER',
-          ),
-        ],
-      ),
-      Complaint(
-        id: 'c3',
-        title: 'Overflowing Sewage Drain near Park',
-        description: 'The open drain near the public children\'s park is overflowing with sewage water. Terrible smell is spreading and it is a health hazard.',
-        category: 'Sanitation',
-        status: 'SUBMITTED',
-        priority: 'HIGH',
-        assignedDepartment: 'Sanitation Dept',
-        latitude: 12.9754,
-        longitude: 77.5998,
-        imageUrl: 'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?q=80&w=600',
-        createdAt: DateTime.now().subtract(const Duration(minutes: 45)),
-        slaDeadline: DateTime.now().add(const Duration(hours: 23, minutes: 15)),
-        agentReasoning: 'CivicAgent Reason: Sanitation and drainage overflow near a public park involves high disease vectors. Priority set to HIGH. Instant department assignment routed.',
-        timeline: [
-          TimelineEvent(
-            id: 'e3_1',
-            status: 'SUBMITTED',
-            title: 'Complaint Submitted',
-            description: 'Grievance registered successfully by Citizen.',
-            timestamp: DateTime.now().subtract(const Duration(minutes: 45)),
-            actor: 'CITIZEN',
-          ),
-          TimelineEvent(
-            id: 'e3_2',
-            status: 'SUBMITTED',
-            title: 'CivicAgent Routing',
-            description: 'AI detected high health risk factor. Categorized as Sanitation. Priority: HIGH. Allocated 24h SLA.',
-            timestamp: DateTime.now().subtract(const Duration(minutes: 44)),
-            actor: 'CIVIC_AGENT',
-          ),
-        ],
-      )
-    ];
+    _complaints = MockRepository().complaints;
   }
 
   Future<void> fetchComplaints() async {
@@ -156,6 +34,7 @@ class ComplaintProvider with ChangeNotifier {
     try {
       if (ApiConfig.useMockMode) {
         await Future.delayed(const Duration(milliseconds: 600));
+        _complaints = List.from(MockRepository().complaints);
       } else {
         final response = await _apiService.get(ApiConfig.complaintsEndpoint);
         final List<dynamic> data = jsonDecode(response.body);
@@ -176,6 +55,7 @@ class ComplaintProvider with ChangeNotifier {
     required double latitude,
     required double longitude,
     required String imagePath,
+    String? userId,
   }) async {
     _isLoading = true;
     notifyListeners();
@@ -202,6 +82,7 @@ class ComplaintProvider with ChangeNotifier {
 
         final newComplaint = Complaint(
           id: newComplaintId,
+          userId: userId ?? 'user_citizen',
           title: title,
           description: description,
           category: deptInfo.backendCategory,
@@ -232,9 +113,11 @@ class ComplaintProvider with ChangeNotifier {
               actor: 'CIVIC_AGENT',
             ),
           ],
+          comments: [],
         );
 
-        _complaints.insert(0, newComplaint);
+        MockRepository().complaints.insert(0, newComplaint);
+        _complaints = List.from(MockRepository().complaints);
         _isLoading = false;
         notifyListeners();
         return true;
@@ -255,7 +138,8 @@ class ComplaintProvider with ChangeNotifier {
         );
 
         final newComplaint = Complaint.fromJson(jsonDecode(response.body));
-        _complaints.insert(0, newComplaint);
+        MockRepository().complaints.insert(0, newComplaint);
+        _complaints = List.from(MockRepository().complaints);
         
         _isLoading = false;
         notifyListeners();
@@ -266,6 +150,51 @@ class ComplaintProvider with ChangeNotifier {
       _isLoading = false;
       notifyListeners();
       return false;
+    }
+  }
+
+  Future<void> postComment(String complaintId, String userName, String text) async {
+    final comment = Comment(
+      id: 'mock_com_${DateTime.now().millisecondsSinceEpoch}',
+      userName: userName,
+      text: text,
+      timestamp: DateTime.now(),
+    );
+
+    MockRepository().addComment(complaintId, comment);
+    _complaints = List.from(MockRepository().complaints);
+    notifyListeners();
+  }
+
+  Future<bool> resolveComplaintByAdmin(String complaintId, String adminName) async {
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      if (ApiConfig.useMockMode) {
+        await Future.delayed(const Duration(milliseconds: 800));
+        MockRepository().resolveComplaint(complaintId, adminName);
+        _complaints = List.from(MockRepository().complaints);
+        return true;
+      } else {
+        // Backend PUT/PATCH resolver endpoint
+        final response = await _apiService.patch(
+          '${ApiConfig.complaintsEndpoint}/$complaintId/resolve',
+          {'description': 'Resolved by official $adminName'},
+        );
+        if (response.statusCode == 200) {
+          MockRepository().resolveComplaint(complaintId, adminName);
+          _complaints = List.from(MockRepository().complaints);
+          return true;
+        }
+        return false;
+      }
+    } catch (e) {
+      _error = e.toString();
+      return false;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
     }
   }
 
@@ -282,6 +211,7 @@ class ComplaintProvider with ChangeNotifier {
         if (isFixed) {
           final updated = Complaint(
             id: old.id,
+            userId: old.userId,
             title: old.title,
             description: old.description,
             category: old.category,
@@ -305,8 +235,14 @@ class ComplaintProvider with ChangeNotifier {
                 actor: 'CITIZEN',
               ),
             ],
+            comments: old.comments,
           );
-          _complaints[index] = updated;
+          
+          final repoIndex = MockRepository().complaints.indexWhere((c) => c.id == complaintId);
+          if (repoIndex != -1) {
+            MockRepository().complaints[repoIndex] = updated;
+          }
+          _complaints = List.from(MockRepository().complaints);
         } else {
           String newPriority = old.priority;
           if (old.priority == 'LOW') {
@@ -317,6 +253,7 @@ class ComplaintProvider with ChangeNotifier {
 
           final updated = Complaint(
             id: old.id,
+            userId: old.userId,
             title: old.title,
             description: old.description,
             category: old.category,
@@ -340,8 +277,14 @@ class ComplaintProvider with ChangeNotifier {
                 actor: 'CITIZEN',
               ),
             ],
+            comments: old.comments,
           );
-          _complaints[index] = updated;
+          
+          final repoIndex = MockRepository().complaints.indexWhere((c) => c.id == complaintId);
+          if (repoIndex != -1) {
+            MockRepository().complaints[repoIndex] = updated;
+          }
+          _complaints = List.from(MockRepository().complaints);
         }
       } else {
         final statusValue = isFixed ? 'FIXED' : 'STILL_EXISTS';
@@ -351,7 +294,11 @@ class ComplaintProvider with ChangeNotifier {
         );
         
         final updatedComplaint = Complaint.fromJson(jsonDecode(response.body));
-        _complaints[index] = updatedComplaint;
+        final repoIndex = MockRepository().complaints.indexWhere((c) => c.id == complaintId);
+        if (repoIndex != -1) {
+          MockRepository().complaints[repoIndex] = updatedComplaint;
+        }
+        _complaints = List.from(MockRepository().complaints);
       }
     } catch (e) {
       _error = e.toString().replaceAll('Exception: ', '');

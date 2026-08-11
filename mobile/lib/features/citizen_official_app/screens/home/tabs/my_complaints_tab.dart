@@ -4,7 +4,7 @@ import '../../../../../core/config/constants.dart';
 import '../../../../../core/state/complaint_provider.dart';
 import '../../../../../core/state/auth_provider.dart';
 import '../../../../../core/models/user.dart';
-import '../../../widgets/complaint_card.dart';
+import '../../../widgets/complaint_grid_card.dart';
 
 class MyComplaintsTab extends StatefulWidget {
   const MyComplaintsTab({super.key});
@@ -27,6 +27,13 @@ class _MyComplaintsTabState extends State<MyComplaintsTab> {
       // Admin department restriction
       if (currentUser?.role == 'ADMIN') {
         if (complaint.departmentId != currentUser?.departmentId) {
+          return false;
+        }
+      }
+
+      // Citizen personal complaints restriction
+      if (currentUser?.role == 'USER') {
+        if (complaint.userId != currentUser?.id) {
           return false;
         }
       }
@@ -99,10 +106,16 @@ class _MyComplaintsTabState extends State<MyComplaintsTab> {
             else
               SliverPadding(
                 padding: const EdgeInsets.symmetric(horizontal: AppConstants.padding),
-                sliver: SliverList(
+                sliver: SliverGrid(
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    mainAxisSpacing: 12,
+                    crossAxisSpacing: 12,
+                    childAspectRatio: 0.82,
+                  ),
                   delegate: SliverChildBuilderDelegate(
                     (context, index) {
-                      return ComplaintCard(complaint: filteredComplaints[index]);
+                      return ComplaintGridCard(complaint: filteredComplaints[index]);
                     },
                     childCount: filteredComplaints.length,
                   ),

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 import '../../../../core/config/constants.dart';
+import '../../../../core/state/auth_provider.dart';
 import '../../../../core/state/complaint_provider.dart';
 import '../../../../core/services/camera_service.dart';
 import '../../../../core/services/location_service.dart';
@@ -174,6 +175,7 @@ class _ReportComplaintScreenState extends State<ReportComplaintScreen> {
       return;
     }
 
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final complaintProvider = Provider.of<ComplaintProvider>(context, listen: false);
     final success = await complaintProvider.submitComplaint(
       title: _titleController.text.trim(),
@@ -182,6 +184,7 @@ class _ReportComplaintScreenState extends State<ReportComplaintScreen> {
       latitude: _selectedLocation!.latitude,
       longitude: _selectedLocation!.longitude,
       imagePath: _imagePath!,
+      userId: authProvider.currentUser?.id,
     );
 
     if (!mounted) return;

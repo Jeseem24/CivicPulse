@@ -1,8 +1,10 @@
 import 'timeline_event.dart';
+import 'comment.dart';
 import '../config/constants.dart';
 
 class Complaint {
   final String id;
+  final String userId; // Owner of the report
   final String title;
   final String description;
   final String category;
@@ -16,6 +18,7 @@ class Complaint {
   final DateTime slaDeadline;
   final String agentReasoning;
   final List<TimelineEvent> timeline;
+  final List<Comment> comments;
 
   // Add a clean mapping layer for UI presentation
   DepartmentInfo get departmentInfo {
@@ -32,6 +35,7 @@ class Complaint {
 
   Complaint({
     required this.id,
+    required this.userId,
     required this.title,
     required this.description,
     required this.category,
@@ -45,14 +49,19 @@ class Complaint {
     required this.slaDeadline,
     required this.agentReasoning,
     required this.timeline,
+    required this.comments,
   });
 
   factory Complaint.fromJson(Map<String, dynamic> json) {
-    var list = json['timeline'] as List? ?? [];
-    List<TimelineEvent> timelineList = list.map((e) => TimelineEvent.fromJson(e)).toList();
+    var timelineListRaw = json['timeline'] as List? ?? [];
+    List<TimelineEvent> timelineList = timelineListRaw.map((e) => TimelineEvent.fromJson(e)).toList();
+
+    var commentsListRaw = json['comments'] as List? ?? [];
+    List<Comment> commentsList = commentsListRaw.map((e) => Comment.fromJson(e)).toList();
 
     return Complaint(
       id: json['id'] ?? '',
+      userId: json['user_id'] ?? json['userId'] ?? 'user_anonymous',
       title: json['title'] ?? '',
       description: json['description'] ?? '',
       category: json['category'] ?? 'Other Civic Issues',
@@ -70,12 +79,14 @@ class Complaint {
           : DateTime.now().add(const Duration(days: 3)), // default fallback SLA
       agentReasoning: json['agent_reasoning'] ?? '',
       timeline: timelineList,
+      comments: commentsList,
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
       'id': id,
+      'user_id': userId,
       'title': title,
       'description': description,
       'category': category,
@@ -89,6 +100,7 @@ class Complaint {
       'sla_deadline': slaDeadline.toIso8601String(),
       'agent_reasoning': agentReasoning,
       'timeline': timeline.map((e) => e.toJson()).toList(),
+      'comments': comments.map((e) => e.toJson()).toList(),
     };
   }
 }

@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'core/config/theme.dart';
 import 'core/state/auth_provider.dart';
 import 'core/state/complaint_provider.dart';
+import 'core/state/notification_provider.dart';
 import 'features/citizen_official_app/screens/splash/splash_screen.dart';
 
 void main() {
@@ -19,6 +20,7 @@ class MyApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => ComplaintProvider()),
+        ChangeNotifierProvider(create: (_) => NotificationProvider()),
       ],
       child: MaterialApp(
         title: 'Civic Connect',

@@ -54,6 +54,24 @@ class ApiService {
     }
   }
 
+  Future<http.Response> patch(String endpoint, Map<String, dynamic> body, {bool requireAuth = true}) async {
+    final url = Uri.parse(ApiConfig.getFullUrl(endpoint));
+    final headers = await _getHeaders(requireAuth: requireAuth);
+
+    try {
+      final response = await http.patch(
+        url,
+        headers: headers,
+        body: jsonEncode(body),
+      );
+      return _handleResponse(response);
+    } on SocketException {
+      throw Exception('Network error. Please check your internet connection.');
+    } catch (e) {
+      rethrow;
+    }
+  }
+
   Future<http.Response> postMultipart({
     required String endpoint,
     required Map<String, String> fields,

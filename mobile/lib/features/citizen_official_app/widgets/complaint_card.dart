@@ -127,7 +127,7 @@ class ComplaintCard extends StatelessWidget {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (context) => ComplaintDetailScreen(complaintId: complaint.id),
+              builder: (context) => ComplaintDetailScreen(complaint: complaint),
             ),
           );
         },
