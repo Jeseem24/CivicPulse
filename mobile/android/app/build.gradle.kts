@@ -8,7 +8,9 @@ plugins {
 android {
     namespace = "com.smartcivic.civic_app"
     compileSdk = flutter.compileSdkVersion
-    ndkVersion = flutter.ndkVersion
+    // The local Flutter default NDK install is incomplete; use the available
+    // stable NDK installed by Android Studio for physical-device builds.
+    ndkVersion = "27.0.12077973"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
