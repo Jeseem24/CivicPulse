@@ -30,17 +30,18 @@ function generateComplaintId() {
  */
 router.post("/", async (req, res) => {
   try {
-    const { title, description, location, photoUrl } = req.body;
+    const { title, description, location, photoUrl, photoData, photoPath, photo } = req.body;
 
     if (!title || !description) {
       return res.status(400).json({ error: "title and description are required fields" });
     }
 
     const complaintId = generateComplaintId();
+    const imageInput = photoData || photoPath || photoUrl || photo || "";
 
     // Run full AI pipeline (falls back to rules automatically)
     const aiResult = await analyzeComplaintAI(title, description, {
-      photoUrl: photoUrl || "",
+      photoUrl: imageInput,
       location: location || null,
       complaintId
     });

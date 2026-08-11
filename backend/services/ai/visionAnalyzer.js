@@ -1,11 +1,13 @@
 /**
  * Vision Analyzer — Image analysis via Gemini multimodal
- * Analyzes complaint photos for damage type, severity, and quality.
+ * Supports HTTP/HTTPS URLs, Local File Paths (C:\...), Data URIs, and Base64 strings.
  */
 
 const { getVisionModel, isAIAvailable } = require("./geminiClient");
 const https = require("https");
 const http = require("http");
+const fs = require("fs");
+const path = require("path");
 
 const VISION_PROMPT = `You are a civic infrastructure damage analyst. Analyze this image of a reported civic problem.
 
@@ -41,7 +43,7 @@ Return a JSON object:
 Return ONLY valid JSON.`;
 
 /**
- * Download image from URL and return as base64
+ * Download remote HTTP/HTTPS image as base64
  */
 async function downloadImageAsBase64(imageUrl) {
   return new Promise((resolve, reject) => {
@@ -68,24 +70,69 @@ async function downloadImageAsBase64(imageUrl) {
 }
 
 /**
- * Analyze a single complaint image
- * @param {string} imageUrl
+ * Resolve image bytes from any input format: HTTP URL, Local File Path, Data URI, or Base64 string
+ */
+async function resolveImageBytes(imageInput) {
+  if (!imageInput || typeof imageInput !== "string" || imageInput.trim() === "") {
+    throw new Error("No image input provided");
+  }
+
+  const str = imageInput.trim();
+
+  // 1. Data URI (e.g. data:image/png;base64,iVBORw0KG...)
+  if (str.startsWith("data:image/")) {
+    const parts = str.split(";base64,");
+    if (parts.length === 2) {
+      const mimeType = parts[0].replace("data:", "");
+      return { mimeType, base64: parts[1] };
+    }
+  }
+
+  // 2. Local File Path (e.g. C:\Users\... or file:///C:/...)
+  let localPath = str;
+  if (localPath.startsWith("file:///")) {
+    localPath = localPath.replace("file:///", "");
+  }
+
+  if (fs.existsSync(localPath)) {
+    const buffer = fs.readFileSync(localPath);
+    const ext = path.extname(localPath).toLowerCase();
+    const mimeType = ext === ".png" ? "image/png" : ext === ".webp" ? "image/webp" : "image/jpeg";
+    return { mimeType, base64: buffer.toString("base64") };
+  }
+
+  // 3. Remote HTTP/HTTPS URL
+  if (str.startsWith("http://") || str.startsWith("https://")) {
+    return await downloadImageAsBase64(str);
+  }
+
+  // 4. Direct raw base64 string (>100 chars, no spaces)
+  if (str.length > 100 && !str.includes(" ")) {
+    return { mimeType: "image/jpeg", base64: str };
+  }
+
+  throw new Error(`Unsupported image input format: ${str.substring(0, 30)}...`);
+}
+
+/**
+ * Analyze a single complaint image (URL, File Path, Data URI, or Base64)
+ * @param {string} imageInput
  * @returns {object} Vision analysis result
  */
-async function analyzeImage(imageUrl) {
+async function analyzeImage(imageInput) {
   const fallback = {
     available: false, detected: false, damageType: "unknown",
     visualSeverity: 0, description: "Vision analysis unavailable",
     objects: [], imageQuality: "unknown", confidence: 0
   };
 
-  if (!isAIAvailable() || !imageUrl || imageUrl === "") return fallback;
+  if (!isAIAvailable() || !imageInput || imageInput === "") return fallback;
 
   const model = getVisionModel();
   if (!model) return fallback;
 
   try {
-    const { base64, mimeType } = await downloadImageAsBase64(imageUrl);
+    const { base64, mimeType } = await resolveImageBytes(imageInput);
 
     const result = await Promise.race([
       model.generateContent({
@@ -122,11 +169,11 @@ async function analyzeImage(imageUrl) {
 
 /**
  * Compare before/after images for resolution verification
- * @param {string} beforeUrl
- * @param {string} afterUrl
+ * @param {string} beforeInput
+ * @param {string} afterInput
  * @returns {object}
  */
-async function compareBeforeAfter(beforeUrl, afterUrl) {
+async function compareBeforeAfter(beforeInput, afterInput) {
   const fallback = {
     available: false, damageBeforeScore: 0, damageAfterScore: 0,
     visualRepairConfidence: 0, visualChangeDetected: false,
@@ -134,15 +181,15 @@ async function compareBeforeAfter(beforeUrl, afterUrl) {
     explanation: "Vision comparison unavailable"
   };
 
-  if (!isAIAvailable() || !beforeUrl || !afterUrl) return fallback;
+  if (!isAIAvailable() || !beforeInput || !afterInput) return fallback;
 
   const model = getVisionModel();
   if (!model) return fallback;
 
   try {
     const [before, after] = await Promise.all([
-      downloadImageAsBase64(beforeUrl),
-      downloadImageAsBase64(afterUrl)
+      resolveImageBytes(beforeInput),
+      resolveImageBytes(afterInput)
     ]);
 
     const result = await Promise.race([
@@ -170,4 +217,4 @@ async function compareBeforeAfter(beforeUrl, afterUrl) {
   }
 }
 
-module.exports = { analyzeImage, compareBeforeAfter };
+module.exports = { analyzeImage, compareBeforeAfter, resolveImageBytes };
