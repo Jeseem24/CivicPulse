@@ -4,8 +4,8 @@
 
 const { getEmbedding, cosineSimilarity, cacheEmbedding, getAllCachedEmbeddings } = require("./embeddingService");
 
-const DUPLICATE_THRESHOLD = 0.88;
-const RELATED_THRESHOLD = 0.72;
+const DUPLICATE_THRESHOLD = 0.70;
+const RELATED_THRESHOLD = 0.50;
 
 /**
  * Find duplicate/related complaints for a new complaint
