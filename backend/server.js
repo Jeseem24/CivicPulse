@@ -50,6 +50,28 @@ app.use("/departments", departmentsRouter);
 app.use("/assistant", assistantRouter);
 app.use("/analytics", analyticsRouter);
 
+// Authentication Endpoints for Mobile App Compatibility
+const MOCK_USERS = [
+  { id: 'admin_roads', name: 'Rajesh Kumar (Roads Admin)', email: 'roads_admin@gov.in', password: 'admin123', role: 'ADMIN', departmentId: 'ROADS_HIGHWAYS' },
+  { id: 'admin_water', name: 'Anil Sharma (Water Admin)', email: 'water_admin@gov.in', password: 'admin123', role: 'ADMIN', departmentId: 'WATER_SUPPLY' },
+  { id: 'admin_sanitation', name: 'Suresh Patel (Sanitation Admin)', email: 'sanitation_admin@gov.in', password: 'admin123', role: 'ADMIN', departmentId: 'SANITATION_WASTE' },
+  { id: 'user_citizen', name: 'Janardhan Rao', email: 'citizen@example.com', password: 'citizen123', role: 'USER', departmentId: null }
+];
+
+const handleAuthLogin = (req, res) => {
+  const { email, password } = req.body;
+  const user = MOCK_USERS.find(u => u.email.toLowerCase() === (email || '').trim().toLowerCase());
+  if (!user || user.password !== password) {
+    return res.status(401).json({ error: "Invalid email or password" });
+  }
+  const { password: _, ...userNoPass } = user;
+  return res.status(200).json({ token: `jwt_${user.id}_token`, user: userNoPass });
+};
+
+app.post('/auth/login', handleAuthLogin);
+app.post('/api/v1/auth/login', handleAuthLogin);
+app.get('/api/v1/auth/me', (req, res) => res.status(200).json({ user: MOCK_USERS[3] }));
+
 // Live AI Decision Feed endpoint
 app.get("/decision-log/feed", async (req, res) => {
   try {
