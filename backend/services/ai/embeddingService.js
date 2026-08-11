@@ -64,7 +64,7 @@ async function getEmbedding(text) {
           return result.embedding.values;
         }
       } catch (err) {
-        // API embedding unavailable or 404 — use local fallback vectorizer
+        // Quietly fall back to local TF-IDF n-gram vectorizer
       }
     }
   }

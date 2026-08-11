@@ -46,7 +46,10 @@ Return ONLY valid JSON.`;
 async function downloadImageAsBase64(imageUrl) {
   return new Promise((resolve, reject) => {
     const client = imageUrl.startsWith("https") ? https : http;
-    const req = client.get(imageUrl, { timeout: 8000 }, (res) => {
+    const req = client.get(imageUrl, {
+      headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) CivicPulse/1.0" },
+      timeout: 8000
+    }, (res) => {
       if (res.statusCode !== 200) {
         reject(new Error(`HTTP ${res.statusCode}`));
         return;
