@@ -8,6 +8,8 @@ class ApiConfig {
   static String baseUrl = 'http://10.99.129.86:3000';
 
   // DEV 2 EXPRESS BACKEND ENDPOINTS
+  static String loginEndpoint = '/api/v1/auth/login';
+  static String registerEndpoint = '/api/v1/auth/register';
   static String complaintsEndpoint = '/complaints';
   static String departmentsEndpoint = '/departments';
   static String analyticsEndpoint = '/analytics';
