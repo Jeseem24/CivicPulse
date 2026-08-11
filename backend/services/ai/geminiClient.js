@@ -4,6 +4,7 @@
  * Returns null clients if GEMINI_API_KEY is not set (enables graceful fallback).
  */
 
+require("dotenv").config();
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 
 let genAI = null;
@@ -20,11 +21,11 @@ function initGemini() {
   }
   try {
     genAI = new GoogleGenerativeAI(apiKey);
-    textModel = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
-    visionModel = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
-    embeddingModel = genAI.getGenerativeModel({ model: "text-embedding-004" });
+    textModel = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    visionModel = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    embeddingModel = genAI.getGenerativeModel({ model: "embedding-001" });
     isAvailable = true;
-    console.log("[AI] Gemini AI initialized successfully (gemini-2.0-flash + text-embedding-004).");
+    console.log("[AI] Gemini AI initialized successfully (gemini-2.5-flash + embedding-001).");
   } catch (err) {
     console.error("[AI] Gemini init failed:", err.message);
     isAvailable = false;
