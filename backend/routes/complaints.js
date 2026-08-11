@@ -14,6 +14,11 @@ const { checkSLABreach } = require("../services/ai/slaEngine");
 const { analyzeResolution } = require("../services/ai/resolutionAnalyzer");
 const { compareBeforeAfter } = require("../services/ai/visionAnalyzer");
 const { generateResolutionLog } = require("../services/ai/explanationEngine");
+const {
+  saveImageData,
+  toAnalysisImageInput,
+  toPublicComplaint
+} = require("../services/imageStorage");
 
 /**
  * Generate human-readable Complaint ID (e.g., CP-2026-00214)
@@ -30,7 +35,16 @@ function generateComplaintId() {
  */
 router.post("/", async (req, res) => {
   try {
-    const { title, description, location, photoUrl, photoData, photoPath, photo } = req.body;
+    const {
+      title,
+      description,
+      location,
+      photoUrl,
+      photoData,
+      photoPath,
+      photo,
+      userId
+    } = req.body;
 
     if (!title || !description) {
       return res.status(400).json({ error: "title and description are required fields" });
@@ -46,10 +60,15 @@ router.post("/", async (req, res) => {
       complaintId
     });
 
+    const storedPhotoUrl = photoData
+      ? await saveImageData(photoData, complaintId, "reported")
+      : (photoUrl || "");
+
     // Construct complaint document per MASTER.md data model
     // ALL REQUIRED FIELDS PRESERVED
     const newComplaint = {
       id: complaintId,
+      userId: userId || "user_anonymous",
       title: title.trim(),
       description: description.trim(),
       category: aiResult.category,
@@ -57,7 +76,7 @@ router.post("/", async (req, res) => {
       department: aiResult.department,
       status: "assigned",
       location: location || { lat: 0.0, lng: 0.0, address: "Unspecified location" },
-      photoUrl: photoUrl || "",
+      photoUrl: storedPhotoUrl,
       createdAt: new Date().toISOString(),
       resolution: null,
       reopenCount: 0,
@@ -68,10 +87,12 @@ router.post("/", async (req, res) => {
     // Save to database & update department total counter
     await db.saveComplaint(newComplaint);
 
-    return res.status(201).json(newComplaint);
+    return res.status(201).json(toPublicComplaint(req, newComplaint));
   } catch (error) {
     console.error("Error creating complaint:", error);
-    return res.status(500).json({ error: "Failed to create complaint" });
+    return res.status(error.statusCode || 500).json({
+      error: error.statusCode ? error.message : "Failed to create complaint"
+    });
   }
 });
 
@@ -88,7 +109,7 @@ router.get("/overdue", async (req, res) => {
         const breach = checkSLABreach(c);
         return breach.breached;
       })
-      .map(c => ({
+      .map(c => toPublicComplaint(req, {
         ...c,
         slaBreach: checkSLABreach(c)
       }))
@@ -115,7 +136,7 @@ router.get("/escalated", async (req, res) => {
         const breach = checkSLABreach(c);
         return breach.breached;
       })
-      .map(c => ({
+      .map(c => toPublicComplaint(req, {
         ...c,
         slaBreach: checkSLABreach(c)
       }))
@@ -137,7 +158,9 @@ router.get("/", async (req, res) => {
   try {
     const { department, status } = req.query;
     const complaints = await db.getComplaints({ department, status });
-    return res.status(200).json(complaints);
+    return res.status(200).json(
+      complaints.map(complaint => toPublicComplaint(req, complaint))
+    );
   } catch (error) {
     console.error("Error listing complaints:", error);
     return res.status(500).json({ error: "Failed to list complaints" });
@@ -170,7 +193,7 @@ router.get("/:id", async (req, res) => {
     if (!complaint) {
       return res.status(404).json({ error: `Complaint with ID ${req.params.id} not found` });
     }
-    return res.status(200).json(complaint);
+    return res.status(200).json(toPublicComplaint(req, complaint));
   } catch (error) {
     console.error("Error getting complaint:", error);
     return res.status(500).json({ error: "Failed to get complaint" });
@@ -185,7 +208,7 @@ router.get("/:id", async (req, res) => {
 router.patch("/:id/resolve", async (req, res) => {
   try {
     const { id } = req.params;
-    const { description } = req.body;
+    const { description, afterPhotoData, afterPhotoUrl } = req.body;
 
     const existing = await db.getComplaintById(id);
     if (!existing) {
@@ -193,6 +216,9 @@ router.patch("/:id/resolve", async (req, res) => {
     }
 
     const resolutionDesc = description || "Resolved by official";
+    const resolutionPhotoUrl = afterPhotoData
+      ? await saveImageData(afterPhotoData, id, "resolved")
+      : (afterPhotoUrl || "");
 
     // AI: Analyze resolution quality
     let resolutionAnalysis = null;
@@ -205,7 +231,8 @@ router.patch("/:id/resolve", async (req, res) => {
     const resolution = {
       description: resolutionDesc,
       resolvedAt: new Date().toISOString(),
-      qualityAnalysis: resolutionAnalysis
+      qualityAnalysis: resolutionAnalysis,
+      photoUrl: resolutionPhotoUrl
     };
 
     // Update complaint status to awaiting_verification
@@ -227,10 +254,12 @@ router.patch("/:id/resolve", async (req, res) => {
       await db.updateDepartmentMetrics(existing.department, { isResolved: true });
     }
 
-    return res.status(200).json(updatedComplaint);
+    return res.status(200).json(toPublicComplaint(req, updatedComplaint));
   } catch (error) {
     console.error("Error resolving complaint:", error);
-    return res.status(500).json({ error: "Failed to resolve complaint" });
+    return res.status(error.statusCode || 500).json({
+      error: error.statusCode ? error.message : "Failed to resolve complaint"
+    });
   }
 });
 
@@ -243,7 +272,7 @@ router.patch("/:id/resolve", async (req, res) => {
 router.patch("/:id/verify", async (req, res) => {
   try {
     const { id } = req.params;
-    const { result, afterPhotoUrl } = req.body;
+    const { result, afterPhotoUrl, afterPhotoData } = req.body;
 
     if (!result || !["fixed", "still_exists"].includes(result)) {
       return res.status(400).json({ error: "result must be either 'fixed' or 'still_exists'" });
@@ -256,11 +285,17 @@ router.patch("/:id/verify", async (req, res) => {
 
     let updateFields = {};
     let verificationAnalysis = null;
+    const verificationImage = afterPhotoData
+      ? await saveImageData(afterPhotoData, id, "verification")
+      : (afterPhotoUrl || "");
 
     // AI: Before/after image comparison (if after photo provided)
-    if (afterPhotoUrl && existing.photoUrl) {
+    if (verificationImage && existing.photoUrl) {
       try {
-        verificationAnalysis = await compareBeforeAfter(existing.photoUrl, afterPhotoUrl);
+        verificationAnalysis = await compareBeforeAfter(
+          toAnalysisImageInput(existing.photoUrl),
+          toAnalysisImageInput(verificationImage)
+        );
       } catch (err) {
         // Vision comparison is best-effort
       }
@@ -286,10 +321,12 @@ router.patch("/:id/verify", async (req, res) => {
     }
 
     const updatedComplaint = await db.updateComplaint(id, updateFields);
-    return res.status(200).json(updatedComplaint);
+    return res.status(200).json(toPublicComplaint(req, updatedComplaint));
   } catch (error) {
     console.error("Error verifying complaint:", error);
-    return res.status(500).json({ error: "Failed to verify complaint" });
+    return res.status(error.statusCode || 500).json({
+      error: error.statusCode ? error.message : "Failed to verify complaint"
+    });
   }
 });
 

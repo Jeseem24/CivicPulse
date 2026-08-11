@@ -17,11 +17,15 @@ class ComplaintCard extends StatelessWidget {
         height: 140,
         color: AppColors.surface,
         child: const Center(
-          child: Icon(Icons.image_outlined, size: 40, color: AppColors.textMuted),
+          child: Icon(
+            Icons.image_outlined,
+            size: 40,
+            color: AppColors.textMuted,
+          ),
         ),
       );
     }
-    
+
     if (url.startsWith('http') || url.startsWith('blob:')) {
       return Image.network(
         url,
@@ -33,7 +37,11 @@ class ComplaintCard extends StatelessWidget {
             height: 140,
             color: AppColors.surface,
             child: const Center(
-              child: Icon(Icons.broken_image_outlined, size: 40, color: AppColors.textMuted),
+              child: Icon(
+                Icons.broken_image_outlined,
+                size: 40,
+                color: AppColors.textMuted,
+              ),
             ),
           );
         },
@@ -44,7 +52,11 @@ class ComplaintCard extends StatelessWidget {
           height: 140,
           color: AppColors.surface,
           child: const Center(
-            child: Icon(Icons.image_outlined, size: 40, color: AppColors.textMuted),
+            child: Icon(
+              Icons.image_outlined,
+              size: 40,
+              color: AppColors.textMuted,
+            ),
           ),
         );
       } else {
@@ -58,7 +70,11 @@ class ComplaintCard extends StatelessWidget {
               height: 140,
               color: AppColors.surface,
               child: const Center(
-                child: Icon(Icons.broken_image_outlined, size: 40, color: AppColors.textMuted),
+                child: Icon(
+                  Icons.broken_image_outlined,
+                  size: 40,
+                  color: AppColors.textMuted,
+                ),
               ),
             );
           },
@@ -74,6 +90,7 @@ class ComplaintCard extends StatelessWidget {
       case 'IN_PROGRESS':
         return AppColors.statusInProgress;
       case 'RESOLVED':
+      case 'AWAITING_VERIFICATION':
         return AppColors.statusResolved;
       case 'VERIFIED':
         return AppColors.statusVerified;
@@ -101,13 +118,15 @@ class ComplaintCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final statusColor = _getStatusColor(complaint.status);
     final priorityColor = _getPriorityColor(complaint.priority);
-    final formattedDate = DateFormat('dd MMM yyyy, hh:mm a').format(complaint.createdAt);
+    final formattedDate = DateFormat(
+      'dd MMM yyyy, hh:mm a',
+    ).format(complaint.createdAt);
 
     // Calculate SLA remaining text
     final now = DateTime.now();
     final isOverdue = now.isAfter(complaint.slaDeadline);
     final duration = complaint.slaDeadline.difference(now);
-    
+
     String slaText = '';
     if (complaint.status == 'VERIFIED') {
       slaText = 'Resolved';
@@ -154,7 +173,10 @@ class ComplaintCard extends StatelessWidget {
                       ),
                       Text(
                         formattedDate,
-                        style: const TextStyle(color: AppColors.textMuted, fontSize: 11),
+                        style: const TextStyle(
+                          color: AppColors.textMuted,
+                          fontSize: 11,
+                        ),
                       ),
                     ],
                   ),
@@ -172,7 +194,11 @@ class ComplaintCard extends StatelessWidget {
                   const SizedBox(height: 6),
                   Text(
                     complaint.description,
-                    style: const TextStyle(color: AppColors.textSecondary, fontSize: 13, height: 1.4),
+                    style: const TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 13,
+                      height: 1.4,
+                    ),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -183,18 +209,27 @@ class ComplaintCard extends StatelessWidget {
                       Row(
                         children: [
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 4,
+                            ),
                             decoration: BoxDecoration(
                               color: statusColor.withOpacity(0.12),
                               borderRadius: BorderRadius.circular(20),
-                              border: Border.all(color: statusColor.withOpacity(0.3), width: 1),
+                              border: Border.all(
+                                color: statusColor.withOpacity(0.3),
+                                width: 1,
+                              ),
                             ),
                             child: Row(
                               children: [
                                 Container(
                                   width: 6,
                                   height: 6,
-                                  decoration: BoxDecoration(color: statusColor, shape: BoxShape.circle),
+                                  decoration: BoxDecoration(
+                                    color: statusColor,
+                                    shape: BoxShape.circle,
+                                  ),
                                 ),
                                 const SizedBox(width: 6),
                                 Text(
@@ -210,7 +245,10 @@ class ComplaintCard extends StatelessWidget {
                           ),
                           const SizedBox(width: 8),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 4,
+                            ),
                             decoration: BoxDecoration(
                               color: priorityColor.withOpacity(0.12),
                               borderRadius: BorderRadius.circular(20),
@@ -232,8 +270,8 @@ class ComplaintCard extends StatelessWidget {
                           color: complaint.status == 'VERIFIED'
                               ? AppColors.textMuted
                               : isOverdue
-                                  ? AppColors.severityHigh
-                                  : AppColors.severityMedium,
+                              ? AppColors.severityHigh
+                              : AppColors.severityMedium,
                           fontSize: 12,
                           fontWeight: FontWeight.bold,
                         ),

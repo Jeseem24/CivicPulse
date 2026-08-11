@@ -1,0 +1,19 @@
+def civicPulseBuildRepo = uri('file:///C:/Users/Asus/Downloads/CMS/CivicPulse/mobile/.tmp-gradle/repo')
+
+gradle.beforeSettings { settings ->
+    settings.pluginManagement.repositories.maven { repository ->
+        repository.url = civicPulseBuildRepo
+    }
+    settings.pluginManagement.repositories.gradlePluginPortal()
+    settings.pluginManagement.repositories.google()
+    settings.pluginManagement.repositories.mavenCentral()
+    settings.dependencyResolutionManagement.repositories.maven { repository ->
+        repository.url = civicPulseBuildRepo
+    }
+}
+
+allprojects {
+    buildscript.repositories.maven { repository ->
+        repository.url = civicPulseBuildRepo
+    }
+}

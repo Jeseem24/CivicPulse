@@ -8,7 +8,9 @@ const sqlite3 = require("sqlite3").verbose();
 const initialDepartments = require("../data/seedDepartments");
 const { calculateTrustScore } = require("../logic/trustScore");
 
-const DB_PATH = path.join(__dirname, "..", "civicpulse.db");
+const DB_PATH = process.env.SQLITE_DB_PATH
+  ? path.resolve(process.env.SQLITE_DB_PATH)
+  : path.join(__dirname, "..", "civicpulse.db");
 const dbSqlite = new sqlite3.Database(DB_PATH);
 
 console.log(`[DB] Connected to persistent SQLite database at ${DB_PATH}`);
@@ -60,6 +62,7 @@ async function initTables() {
     await runAsync(`
       CREATE TABLE IF NOT EXISTS complaints (
         id TEXT PRIMARY KEY,
+        userId TEXT NOT NULL DEFAULT 'user_anonymous',
         title TEXT NOT NULL,
         description TEXT NOT NULL,
         category TEXT NOT NULL,
@@ -74,6 +77,15 @@ async function initTables() {
         aiAnalysis TEXT
       )
     `);
+
+    // Add fields introduced after the first local database version.
+    const complaintColumns = await allAsync("PRAGMA table_info(complaints)");
+    if (!complaintColumns.some(column => column.name === "userId")) {
+      await runAsync(
+        "ALTER TABLE complaints ADD COLUMN userId TEXT NOT NULL DEFAULT 'user_anonymous'"
+      );
+      console.log("[DB] Migrated complaints table: added userId.");
+    }
 
     // 3. Decision Logs table
     await runAsync(`
@@ -183,11 +195,12 @@ const db = {
     const aiAnalysisJson = complaint.aiAnalysis ? JSON.stringify(complaint.aiAnalysis) : null;
 
     await runAsync(
-      `INSERT OR REPLACE INTO complaints 
-       (id, title, description, category, priority, department, status, location, photoUrl, createdAt, resolution, reopenCount, aiAnalysis) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT OR REPLACE INTO complaints
+       (id, userId, title, description, category, priority, department, status, location, photoUrl, createdAt, resolution, reopenCount, aiAnalysis)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         complaint.id,
+        complaint.userId || "user_anonymous",
         complaint.title,
         complaint.description,
         complaint.category,
@@ -255,11 +268,12 @@ const db = {
     const aiAnalysisJson = updated.aiAnalysis ? JSON.stringify(updated.aiAnalysis) : null;
 
     await runAsync(
-      `UPDATE complaints SET 
-       title = ?, description = ?, category = ?, priority = ?, department = ?, 
+      `UPDATE complaints SET
+       userId = ?, title = ?, description = ?, category = ?, priority = ?, department = ?,
        status = ?, location = ?, photoUrl = ?, resolution = ?, reopenCount = ?, aiAnalysis = ? 
        WHERE id = ?`,
       [
+        updated.userId || "user_anonymous",
         updated.title,
         updated.description,
         updated.category,
@@ -313,6 +327,16 @@ const db = {
       [limit]
     );
     return rows.map(r => JSON.parse(r.logData));
+  },
+
+  async close() {
+    await ensureInit();
+    return new Promise((resolve, reject) => {
+      dbSqlite.close(error => {
+        if (error) reject(error);
+        else resolve();
+      });
+    });
   }
 };
 

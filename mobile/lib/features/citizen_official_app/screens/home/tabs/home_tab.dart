@@ -31,8 +31,8 @@ class HomeTab extends StatelessWidget {
     if (currentUser == null) return const SizedBox.shrink();
 
     // Current citizen coordinate fallbacks
-    const double currentLat = 12.9716;
-    const double currentLng = 77.5946;
+    const double currentLat = 8.2000;
+    const double currentLng = 77.3833;
 
     final radiusKm = settingsProvider.radiusKm;
 

@@ -63,7 +63,7 @@ class _LocationPickerWidgetState extends State<LocationPickerWidget> {
     final result = await Navigator.of(context).push<LatLng>(
       MaterialPageRoute<LatLng>(
         builder: (_) => MapPickerScreen(
-          initialLocation: widget.value ?? const LatLng(12.9716, 77.5946),
+          initialLocation: widget.value ?? const LatLng(8.2000, 77.3833),
         ),
       ),
     );

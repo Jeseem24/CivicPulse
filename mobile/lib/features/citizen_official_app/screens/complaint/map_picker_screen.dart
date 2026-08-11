@@ -9,7 +9,7 @@ class MapPickerScreen extends StatefulWidget {
 
   const MapPickerScreen({
     super.key,
-    this.initialLocation = const LatLng(12.9716, 77.5946),
+    this.initialLocation = const LatLng(8.2000, 77.3833),
   });
 
   @override
@@ -31,8 +31,8 @@ class _MapPickerScreenState extends State<MapPickerScreen> {
   }
 
   bool get _startsAtFallback =>
-      widget.initialLocation.latitude == 12.9716 &&
-      widget.initialLocation.longitude == 77.5946;
+      widget.initialLocation.latitude == 8.2000 &&
+      widget.initialLocation.longitude == 77.3833;
 
   Future<void> _locateDevice() async {
     if (_isLocating) return;

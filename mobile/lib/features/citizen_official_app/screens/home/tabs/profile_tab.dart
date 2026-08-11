@@ -14,11 +14,18 @@ class ProfileTab extends StatelessWidget {
     final authProvider = Provider.of<AuthProvider>(context);
     final complaintProvider = Provider.of<ComplaintProvider>(context);
     final complaints = complaintProvider.complaints;
-    
+
     final user = authProvider.currentUser;
 
     final totalReports = complaints.length;
-    final resolvedReports = complaints.where((c) => c.status == 'RESOLVED' || c.status == 'VERIFIED').length;
+    final resolvedReports = complaints
+        .where(
+          (c) =>
+              c.status == 'RESOLVED' ||
+              c.status == 'AWAITING_VERIFICATION' ||
+              c.status == 'VERIFIED',
+        )
+        .length;
     final activeReports = totalReports - resolvedReports;
 
     return Scaffold(
@@ -72,15 +79,30 @@ class ProfileTab extends StatelessWidget {
             Row(
               children: [
                 Expanded(
-                  child: _buildStatCard('Total Reports', '$totalReports', Icons.assignment_outlined, AppColors.primary),
+                  child: _buildStatCard(
+                    'Total Reports',
+                    '$totalReports',
+                    Icons.assignment_outlined,
+                    AppColors.primary,
+                  ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: _buildStatCard('Active', '$activeReports', Icons.pending_actions_outlined, AppColors.severityMedium),
+                  child: _buildStatCard(
+                    'Active',
+                    '$activeReports',
+                    Icons.pending_actions_outlined,
+                    AppColors.severityMedium,
+                  ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: _buildStatCard('Resolved', '$resolvedReports', Icons.check_circle_outline, AppColors.severityLow),
+                  child: _buildStatCard(
+                    'Resolved',
+                    '$resolvedReports',
+                    Icons.check_circle_outline,
+                    AppColors.severityLow,
+                  ),
                 ),
               ],
             ),
@@ -92,7 +114,9 @@ class ProfileTab extends StatelessWidget {
               onTap: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (context) => const SettingsScreen()),
+                  MaterialPageRoute(
+                    builder: (context) => const SettingsScreen(),
+                  ),
                 );
               },
             ),
@@ -140,7 +164,12 @@ class ProfileTab extends StatelessWidget {
     );
   }
 
-  Widget _buildStatCard(String label, String value, IconData icon, Color color) {
+  Widget _buildStatCard(
+    String label,
+    String value,
+    IconData icon,
+    Color color,
+  ) {
     return Card(
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
@@ -190,7 +219,10 @@ class ProfileTab extends StatelessWidget {
         ),
         title: Text(
           title,
-          style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+          style: const TextStyle(
+            fontWeight: FontWeight.bold,
+            color: AppColors.textPrimary,
+          ),
         ),
         subtitle: Text(
           subtitle,

@@ -23,7 +23,7 @@ class CivicMapTab extends StatefulWidget {
 }
 
 class _CivicMapTabState extends State<CivicMapTab> {
-  static const LatLng _defaultCenter = LatLng(12.9716, 77.5946);
+  static const LatLng _defaultCenter = LatLng(8.2000, 77.3833);
 
   final MapController _mapController = MapController();
   final LocationService _locationService = LocationService();

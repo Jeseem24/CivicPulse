@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import '../config/api_config.dart';
 import '../config/constants.dart';
@@ -12,6 +13,7 @@ class ComplaintProvider with ChangeNotifier {
   final ApiService _apiService = ApiService();
   List<Complaint> _complaints = [];
   bool _isLoading = false;
+  bool _isFetching = false;
   String? _error;
 
   List<Complaint> get complaints => _complaints;
@@ -19,32 +21,82 @@ class ComplaintProvider with ChangeNotifier {
   String? get error => _error;
 
   ComplaintProvider() {
-    _loadMockComplaints();
+    if (ApiConfig.useMockMode) {
+      _loadMockComplaints();
+    }
   }
 
   void _loadMockComplaints() {
     _complaints = MockRepository().complaints;
   }
 
-  Future<void> fetchComplaints() async {
-    _isLoading = true;
+  Future<void> fetchComplaints({bool silent = false}) async {
+    if (_isFetching || (silent && _isLoading)) return;
+    _isFetching = true;
+    if (!silent) _isLoading = true;
     _error = null;
-    notifyListeners();
+    if (!silent) notifyListeners();
 
     try {
       if (ApiConfig.useMockMode) {
         await Future.delayed(const Duration(milliseconds: 600));
         _complaints = List.from(MockRepository().complaints);
       } else {
-        final response = await _apiService.get(ApiConfig.complaintsEndpoint, requireAuth: false);
+        final response = await _apiService.get(
+          ApiConfig.complaintsEndpoint,
+          requireAuth: false,
+        );
         final List<dynamic> data = jsonDecode(response.body);
         _complaints = data.map((json) => Complaint.fromJson(json)).toList();
       }
     } catch (e) {
       _error = e.toString().replaceAll('Exception: ', '');
     } finally {
-      _isLoading = false;
+      _isFetching = false;
+      if (!silent) _isLoading = false;
       notifyListeners();
+    }
+  }
+
+  String _imageMimeType(List<int> bytes) {
+    if (bytes.length >= 3 &&
+        bytes[0] == 0xff &&
+        bytes[1] == 0xd8 &&
+        bytes[2] == 0xff) {
+      return 'image/jpeg';
+    }
+    if (bytes.length >= 8 &&
+        bytes[0] == 0x89 &&
+        bytes[1] == 0x50 &&
+        bytes[2] == 0x4e &&
+        bytes[3] == 0x47) {
+      return 'image/png';
+    }
+    if (bytes.length >= 12 &&
+        ascii.decode(bytes.sublist(0, 4), allowInvalid: true) == 'RIFF' &&
+        ascii.decode(bytes.sublist(8, 12), allowInvalid: true) == 'WEBP') {
+      return 'image/webp';
+    }
+    throw Exception('Please choose a JPEG, PNG, or WebP image.');
+  }
+
+  Future<String> _imageAsDataUri(String imagePath) async {
+    final bytes = await File(imagePath).readAsBytes();
+    if (bytes.length > 8 * 1024 * 1024) {
+      throw Exception('The selected image is larger than 8 MB.');
+    }
+    final mimeType = _imageMimeType(bytes);
+    return 'data:$mimeType;base64,${base64Encode(bytes)}';
+  }
+
+  void _upsertLiveComplaint(Complaint complaint, {bool prepend = false}) {
+    final index = _complaints.indexWhere((item) => item.id == complaint.id);
+    if (index >= 0) {
+      _complaints[index] = complaint;
+    } else if (prepend) {
+      _complaints.insert(0, complaint);
+    } else {
+      _complaints.add(complaint);
     }
   }
 
@@ -58,6 +110,7 @@ class ComplaintProvider with ChangeNotifier {
     String? userId,
   }) async {
     _isLoading = true;
+    _error = null;
     notifyListeners();
 
     try {
@@ -68,13 +121,17 @@ class ComplaintProvider with ChangeNotifier {
 
       if (ApiConfig.useMockMode) {
         await Future.delayed(const Duration(seconds: 1));
-        final newComplaintId = 'mock_c_${DateTime.now().millisecondsSinceEpoch}';
-        
+        final newComplaintId =
+            'mock_c_${DateTime.now().millisecondsSinceEpoch}';
+
         String priority = 'MEDIUM';
         String dept = deptInfo.backendDepartment;
-        String reasoning = 'CivicAgent Reason: Routed automatically to ${deptInfo.name} based on AI text analysis.';
-        
-        if (category == 'ROADS_HIGHWAYS' || category == 'WATER_SUPPLY' || category == 'SANITATION_WASTE') {
+        String reasoning =
+            'CivicAgent Reason: Routed automatically to ${deptInfo.name} based on AI text analysis.';
+
+        if (category == 'ROADS_HIGHWAYS' ||
+            category == 'WATER_SUPPLY' ||
+            category == 'SANITATION_WASTE') {
           priority = 'HIGH';
         } else if (category == 'ELECTRICITY_POWER') {
           priority = 'MEDIUM';
@@ -91,7 +148,9 @@ class ComplaintProvider with ChangeNotifier {
           assignedDepartment: dept,
           latitude: latitude,
           longitude: longitude,
-          imageUrl: imagePath.isNotEmpty ? imagePath : 'https://images.unsplash.com/photo-1599740831119-07284763f831?q=80&w=600',
+          imageUrl: imagePath.isNotEmpty
+              ? imagePath
+              : 'https://images.unsplash.com/photo-1599740831119-07284763f831?q=80&w=600',
           createdAt: DateTime.now(),
           slaDeadline: DateTime.now().add(const Duration(days: 2)),
           agentReasoning: reasoning,
@@ -122,6 +181,7 @@ class ComplaintProvider with ChangeNotifier {
         notifyListeners();
         return true;
       } else {
+        final photoData = await _imageAsDataUri(imagePath);
         final payload = {
           'title': title,
           'description': description,
@@ -129,9 +189,10 @@ class ComplaintProvider with ChangeNotifier {
           'location': {
             'lat': latitude,
             'lng': longitude,
-            'address': 'Submitted via CivicPulse Mobile App'
+            'address': 'Submitted via CivicPulse Mobile App',
           },
-          'photoPath': imagePath,
+          'photoData': photoData,
+          'userId': userId ?? 'user_anonymous',
         };
 
         final response = await _apiService.post(
@@ -141,9 +202,8 @@ class ComplaintProvider with ChangeNotifier {
         );
 
         final newComplaint = Complaint.fromJson(jsonDecode(response.body));
-        MockRepository().complaints.insert(0, newComplaint);
-        _complaints = List.from(MockRepository().complaints);
-        
+        _upsertLiveComplaint(newComplaint, prepend: true);
+
         _isLoading = false;
         notifyListeners();
         return true;
@@ -156,7 +216,11 @@ class ComplaintProvider with ChangeNotifier {
     }
   }
 
-  Future<void> postComment(String complaintId, String userName, String text) async {
+  Future<void> postComment(
+    String complaintId,
+    String userName,
+    String text,
+  ) async {
     final comment = Comment(
       id: 'mock_com_${DateTime.now().millisecondsSinceEpoch}',
       userName: userName,
@@ -169,7 +233,10 @@ class ComplaintProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  Future<bool> resolveComplaintByAdmin(String complaintId, String adminName) async {
+  Future<bool> resolveComplaintByAdmin(
+    String complaintId,
+    String adminName,
+  ) async {
     _isLoading = true;
     notifyListeners();
 
@@ -186,8 +253,10 @@ class ComplaintProvider with ChangeNotifier {
           requireAuth: false,
         );
         if (response.statusCode == 200) {
-          MockRepository().resolveComplaint(complaintId, adminName);
-          _complaints = List.from(MockRepository().complaints);
+          final updatedComplaint = Complaint.fromJson(
+            jsonDecode(response.body),
+          );
+          _upsertLiveComplaint(updatedComplaint);
           return true;
         }
         return false;
@@ -233,15 +302,18 @@ class ComplaintProvider with ChangeNotifier {
                 id: 'e_verify_${DateTime.now().millisecondsSinceEpoch}',
                 status: 'VERIFIED',
                 title: 'Resolution Verified',
-                description: 'Citizen verified that the issue has been FIXED. Complaint is closed.',
+                description:
+                    'Citizen verified that the issue has been FIXED. Complaint is closed.',
                 timestamp: DateTime.now(),
                 actor: 'CITIZEN',
               ),
             ],
             comments: old.comments,
           );
-          
-          final repoIndex = MockRepository().complaints.indexWhere((c) => c.id == complaintId);
+
+          final repoIndex = MockRepository().complaints.indexWhere(
+            (c) => c.id == complaintId,
+          );
           if (repoIndex != -1) {
             MockRepository().complaints[repoIndex] = updated;
           }
@@ -268,22 +340,26 @@ class ComplaintProvider with ChangeNotifier {
             imageUrl: old.imageUrl,
             createdAt: old.createdAt,
             slaDeadline: DateTime.now().add(const Duration(hours: 12)),
-            agentReasoning: '${old.agentReasoning}\n[Escalated] Citizen reported resolution failure. Re-opened and escalated priority to $newPriority.',
+            agentReasoning:
+                '${old.agentReasoning}\n[Escalated] Citizen reported resolution failure. Re-opened and escalated priority to $newPriority.',
             timeline: [
               ...old.timeline,
               TimelineEvent(
                 id: 'e_reopen_${DateTime.now().millisecondsSinceEpoch}',
                 status: 'REOPENED',
                 title: 'Complaint Reopened',
-                description: 'Citizen reported: STILL EXISTS. Complaint reopened and escalated.',
+                description:
+                    'Citizen reported: STILL EXISTS. Complaint reopened and escalated.',
                 timestamp: DateTime.now(),
                 actor: 'CITIZEN',
               ),
             ],
             comments: old.comments,
           );
-          
-          final repoIndex = MockRepository().complaints.indexWhere((c) => c.id == complaintId);
+
+          final repoIndex = MockRepository().complaints.indexWhere(
+            (c) => c.id == complaintId,
+          );
           if (repoIndex != -1) {
             MockRepository().complaints[repoIndex] = updated;
           }
@@ -296,13 +372,9 @@ class ComplaintProvider with ChangeNotifier {
           {'result': resultValue},
           requireAuth: false,
         );
-        
+
         final updatedComplaint = Complaint.fromJson(jsonDecode(response.body));
-        final repoIndex = MockRepository().complaints.indexWhere((c) => c.id == complaintId);
-        if (repoIndex != -1) {
-          MockRepository().complaints[repoIndex] = updatedComplaint;
-        }
-        _complaints = List.from(MockRepository().complaints);
+        _upsertLiveComplaint(updatedComplaint);
       }
     } catch (e) {
       _error = e.toString().replaceAll('Exception: ', '');

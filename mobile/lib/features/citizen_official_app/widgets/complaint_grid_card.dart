@@ -10,7 +10,8 @@ class ComplaintGridCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final formattedDate = '${complaint.createdAt.day}/${complaint.createdAt.month}/${complaint.createdAt.year}';
+    final formattedDate =
+        '${complaint.createdAt.day}/${complaint.createdAt.month}/${complaint.createdAt.year}';
     final statusColor = _getStatusColor(complaint.status);
 
     return Container(
@@ -57,7 +58,10 @@ class ComplaintGridCard extends StatelessWidget {
                     top: 8,
                     left: 8,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 3,
+                      ),
                       decoration: BoxDecoration(
                         color: statusColor.withOpacity(0.9),
                         borderRadius: BorderRadius.circular(4),
@@ -127,6 +131,7 @@ class ComplaintGridCard extends StatelessWidget {
       case 'IN_PROGRESS':
         return AppColors.statusInProgress;
       case 'RESOLVED':
+      case 'AWAITING_VERIFICATION':
         return AppColors.statusResolved;
       case 'VERIFIED':
         return AppColors.statusVerified;

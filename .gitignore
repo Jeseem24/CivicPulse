@@ -9,6 +9,7 @@ yarn-error.log*
 .env.test.local
 .env.production.local
 *.db
+backend/uploads/
 
 # Flutter / Dart
 mobile/.dart_tool/

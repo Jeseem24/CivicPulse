@@ -40,13 +40,15 @@ class _MyComplaintsTabState extends State<MyComplaintsTab> {
 
       if (_selectedFilter == 'ALL') return true;
       if (_selectedFilter == 'PENDING') {
-        return complaint.status == 'SUBMITTED' || 
-               complaint.status == 'IN_PROGRESS' || 
-               complaint.status == 'REOPENED';
+        return complaint.status == 'SUBMITTED' ||
+            complaint.status == 'ASSIGNED' ||
+            complaint.status == 'IN_PROGRESS' ||
+            complaint.status == 'REOPENED';
       }
       if (_selectedFilter == 'RESOLVED') {
-        return complaint.status == 'RESOLVED' || 
-               complaint.status == 'VERIFIED';
+        return complaint.status == 'RESOLVED' ||
+            complaint.status == 'AWAITING_VERIFICATION' ||
+            complaint.status == 'VERIFIED';
       }
       return true;
     }).toList();
@@ -66,7 +68,11 @@ class _MyComplaintsTabState extends State<MyComplaintsTab> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     if (currentUser?.role == 'ADMIN') ...[
-                      _buildAdminHeaderCard(context, currentUser!, filteredComplaints.length),
+                      _buildAdminHeaderCard(
+                        context,
+                        currentUser!,
+                        filteredComplaints.length,
+                      ),
                       const SizedBox(height: 16),
                     ],
                     Row(
@@ -88,16 +94,27 @@ class _MyComplaintsTabState extends State<MyComplaintsTab> {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Icon(Icons.assignment_turned_in_outlined, size: 64, color: AppColors.textMuted),
+                      const Icon(
+                        Icons.assignment_turned_in_outlined,
+                        size: 64,
+                        color: AppColors.textMuted,
+                      ),
                       const SizedBox(height: 16),
                       const Text(
                         'No complaints found',
-                        style: TextStyle(fontSize: 18, color: AppColors.textSecondary, fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                          fontSize: 18,
+                          color: AppColors.textSecondary,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                       const SizedBox(height: 8),
                       const Text(
                         'Tap the + button to report a new issue.',
-                        style: TextStyle(fontSize: 14, color: AppColors.textMuted),
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: AppColors.textMuted,
+                        ),
                       ),
                     ],
                   ),
@@ -105,7 +122,9 @@ class _MyComplaintsTabState extends State<MyComplaintsTab> {
               )
             else
               SliverPadding(
-                padding: const EdgeInsets.symmetric(horizontal: AppConstants.padding),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppConstants.padding,
+                ),
                 sliver: SliverGrid(
                   gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: 2,
@@ -113,12 +132,11 @@ class _MyComplaintsTabState extends State<MyComplaintsTab> {
                     crossAxisSpacing: 12,
                     childAspectRatio: 0.82,
                   ),
-                  delegate: SliverChildBuilderDelegate(
-                    (context, index) {
-                      return ComplaintGridCard(complaint: filteredComplaints[index]);
-                    },
-                    childCount: filteredComplaints.length,
-                  ),
+                  delegate: SliverChildBuilderDelegate((context, index) {
+                    return ComplaintGridCard(
+                      complaint: filteredComplaints[index],
+                    );
+                  }, childCount: filteredComplaints.length),
                 ),
               ),
           ],
@@ -149,7 +167,9 @@ class _MyComplaintsTabState extends State<MyComplaintsTab> {
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
         side: BorderSide(
-          color: isSelected ? AppColors.primary.withOpacity(0.5) : AppColors.border,
+          color: isSelected
+              ? AppColors.primary.withOpacity(0.5)
+              : AppColors.border,
         ),
       ),
       showCheckmark: false,
@@ -157,10 +177,12 @@ class _MyComplaintsTabState extends State<MyComplaintsTab> {
   }
 
   Widget _buildAdminHeaderCard(BuildContext context, User admin, int count) {
-    final deptName = AppConstants.departments.firstWhere(
-      (d) => d.id == admin.departmentId,
-      orElse: () => AppConstants.departments.first,
-    ).name;
+    final deptName = AppConstants.departments
+        .firstWhere(
+          (d) => d.id == admin.departmentId,
+          orElse: () => AppConstants.departments.first,
+        )
+        .name;
 
     return Container(
       width: double.infinity,
@@ -237,13 +259,13 @@ class _MyComplaintsTabState extends State<MyComplaintsTab> {
             children: [
               const Text(
                 'Department Grievances',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: AppColors.textSecondary,
-                ),
+                style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
                   color: AppColors.primary,
                   borderRadius: BorderRadius.circular(12),

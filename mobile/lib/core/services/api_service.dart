@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
@@ -5,6 +6,7 @@ import '../config/api_config.dart';
 import 'secure_storage_service.dart';
 
 class ApiService {
+  static const Duration _requestTimeout = Duration(seconds: 60);
   final SecureStorageService _storage = SecureStorageService();
 
   Future<Map<String, String>> _getHeaders({bool requireAuth = true}) async {
@@ -27,46 +29,64 @@ class ApiService {
     final headers = await _getHeaders(requireAuth: requireAuth);
 
     try {
-      final response = await http.get(url, headers: headers);
+      final response = await http
+          .get(url, headers: headers)
+          .timeout(_requestTimeout);
       return _handleResponse(response);
     } on SocketException {
-      throw Exception('Network error. Please check your internet connection.');
+      throw Exception(
+        'Cannot reach the CivicPulse server. Check that the laptop server is running and both devices are on the same network.',
+      );
+    } on TimeoutException {
+      throw Exception('The CivicPulse server took too long to respond.');
     } catch (e) {
       rethrow;
     }
   }
 
-  Future<http.Response> post(String endpoint, Map<String, dynamic> body, {bool requireAuth = true}) async {
+  Future<http.Response> post(
+    String endpoint,
+    Map<String, dynamic> body, {
+    bool requireAuth = true,
+  }) async {
     final url = Uri.parse(ApiConfig.getFullUrl(endpoint));
     final headers = await _getHeaders(requireAuth: requireAuth);
 
     try {
-      final response = await http.post(
-        url,
-        headers: headers,
-        body: jsonEncode(body),
-      );
+      final response = await http
+          .post(url, headers: headers, body: jsonEncode(body))
+          .timeout(_requestTimeout);
       return _handleResponse(response);
     } on SocketException {
-      throw Exception('Network error. Please check your internet connection.');
+      throw Exception(
+        'Cannot reach the CivicPulse server. Check that the laptop server is running and both devices are on the same network.',
+      );
+    } on TimeoutException {
+      throw Exception('The CivicPulse server took too long to respond.');
     } catch (e) {
       rethrow;
     }
   }
 
-  Future<http.Response> patch(String endpoint, Map<String, dynamic> body, {bool requireAuth = true}) async {
+  Future<http.Response> patch(
+    String endpoint,
+    Map<String, dynamic> body, {
+    bool requireAuth = true,
+  }) async {
     final url = Uri.parse(ApiConfig.getFullUrl(endpoint));
     final headers = await _getHeaders(requireAuth: requireAuth);
 
     try {
-      final response = await http.patch(
-        url,
-        headers: headers,
-        body: jsonEncode(body),
-      );
+      final response = await http
+          .patch(url, headers: headers, body: jsonEncode(body))
+          .timeout(_requestTimeout);
       return _handleResponse(response);
     } on SocketException {
-      throw Exception('Network error. Please check your internet connection.');
+      throw Exception(
+        'Cannot reach the CivicPulse server. Check that the laptop server is running and both devices are on the same network.',
+      );
+    } on TimeoutException {
+      throw Exception('The CivicPulse server took too long to respond.');
     } catch (e) {
       rethrow;
     }
@@ -94,11 +114,15 @@ class ApiService {
     }
 
     try {
-      final streamedResponse = await request.send();
+      final streamedResponse = await request.send().timeout(_requestTimeout);
       final response = await http.Response.fromStream(streamedResponse);
       return _handleResponse(response);
     } on SocketException {
-      throw Exception('Network error. Please check your internet connection.');
+      throw Exception(
+        'Cannot reach the CivicPulse server. Check that the laptop server is running and both devices are on the same network.',
+      );
+    } on TimeoutException {
+      throw Exception('The CivicPulse server took too long to respond.');
     } catch (e) {
       rethrow;
     }
@@ -107,15 +131,19 @@ class ApiService {
   http.Response _handleResponse(http.Response response) {
     if (response.statusCode >= 200 && response.statusCode < 300) {
       return response;
-    } else {
-      try {
-        final errorData = jsonDecode(response.body);
-        final errorMessage = errorData['detail'] ?? errorData['message'] ?? 'An error occurred (${response.statusCode})';
-        throw Exception(errorMessage);
-      } catch (e) {
-        if (e is Exception) rethrow;
-        throw Exception('Server error: ${response.statusCode}');
-      }
     }
+
+    try {
+      final errorData = jsonDecode(response.body);
+      final errorMessage =
+          errorData['error'] ?? errorData['detail'] ?? errorData['message'];
+      if (errorMessage != null) {
+        throw Exception(errorMessage.toString());
+      }
+    } on FormatException {
+      // Fall through to the generic status message below.
+    }
+
+    throw Exception('Server error: ${response.statusCode}');
   }
 }

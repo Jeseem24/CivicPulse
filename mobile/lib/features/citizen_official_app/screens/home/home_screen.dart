@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../../core/config/constants.dart';
 import '../../../../core/state/auth_provider.dart';
+import '../../../../core/state/complaint_provider.dart';
 import '../../../../core/state/notification_provider.dart';
 import 'tabs/home_tab.dart';
 import 'tabs/my_complaints_tab.dart';
@@ -20,6 +22,26 @@ class HomeScreen extends StatefulWidget {
 
 class HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
+  Timer? _refreshTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) context.read<ComplaintProvider>().fetchComplaints();
+    });
+    _refreshTimer = Timer.periodic(const Duration(seconds: 12), (_) {
+      if (mounted) {
+        context.read<ComplaintProvider>().fetchComplaints(silent: true);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
+  }
 
   void setIndex(int index) {
     setState(() {
@@ -104,9 +126,7 @@ class HomeScreenState extends State<HomeScreen> {
             onPressed: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(
-                  builder: (context) => const SettingsScreen(),
-                ),
+                MaterialPageRoute(builder: (context) => const SettingsScreen()),
               );
             },
           ),
@@ -114,12 +134,14 @@ class HomeScreenState extends State<HomeScreen> {
         ],
       ),
       body: activeTabs[_currentIndex],
-      floatingActionButton: (isUser && _currentIndex != 2 && _currentIndex != 3) 
+      floatingActionButton: (isUser && _currentIndex != 2 && _currentIndex != 3)
           ? FloatingActionButton(
               onPressed: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (context) => const ReportComplaintScreen()),
+                  MaterialPageRoute(
+                    builder: (context) => const ReportComplaintScreen(),
+                  ),
                 );
               },
               backgroundColor: AppColors.primary,
